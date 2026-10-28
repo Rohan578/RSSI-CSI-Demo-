@@ -7,10 +7,18 @@
  *
  * Capabilities:
  *   - WiFi STA connection with auto-reconnect
- *   - CSI frame capture in promiscuous mode
+ *   - Receives ESP-NOW packets from an ESP32-C6 and captures CSI from them
+ *   - Learns the C6's MAC from its ESP-NOW packets and drops CSI from any
+ *     other transmitter
  *   - ADR-018 binary frame serialization
- *   - UDP streaming to aggregator host
+ *   - UDP streaming to aggregator host (every captured frame, queued)
  *   - Runtime provisioning via Serial commands
+ *
+ * Data path:
+ *   C6 --ESP-NOW (HT20 MCS0, broadcast)--> S3 --UDP over WiFi--> PC (csi_receiver.py)
+ *
+ * Both boards must join the same WiFi network so they share a channel.
+ * The C6 sketch is esp32c6_espnow_sender.ino.
  *
  * Hardware:  ESP32-S3 (any board with 8 MB flash — DevKitC-1, XIAO, etc.)
  * Framework: Arduino-ESP32 v3.x (ESP-IDF v5.1+ under the hood)
@@ -30,25 +38,42 @@
 #include <WiFiUdp.h>
 #include "esp_wifi.h"
 #include "esp_wifi_types.h"
+#include "esp_now.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 
 // ─── USER CONFIGURATION ────────────────────────────────────────────────────
 // Edit these values for your deployment, or provision at runtime over Serial.
 
 #define WIFI_SSID          "Cambukingham"
 #define WIFI_PASSWORD      "gavril2006"                    // empty = open network
-#define AGGREGATOR_IP      "172.21.240.1"       // host running sensing-server
+#define AGGREGATOR_IP      "172.21.240.1"       // the PC running csi_receiver.py
 #define AGGREGATOR_PORT    5005                  // UDP port
 #define CSI_NODE_ID        1                     // unique per node (0-255)
-#define CSI_WIFI_CHANNEL   6                     // channel to listen on
-#define SAMPLE_RATE_HZ     20                    // target CSI frame rate
+
+// Optional: pin the C6's MAC instead of learning it from its first ESP-NOW
+// packet. Uncomment and fill in (the C6 prints its MAC on boot).
+// #define TX_MAC          {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
 
 // ─── ADR-018 CONSTANTS ─────────────────────────────────────────────────────
 
 static const uint32_t ADR018_MAGIC   = 0xC5110001;
 static const uint16_t HEADER_SIZE    = 20;
-static const uint16_t MAX_SUBCARRIERS = 128;    // Cap for I/Q buffer
+// HT20 CSI with LLTF + HT-LTF merged is 128 subcarriers (256 bytes); packets
+// with STBC add another 64 (384 bytes). Size the buffers for the larger case.
+static const uint16_t MAX_SUBCARRIERS = 192;
+static const uint16_t IQ_BUF_BYTES    = MAX_SUBCARRIERS * 2;
 static const int      WIFI_CONNECT_RETRIES     = 40;   // 40 * 500ms = 20s timeout
 static const int      WIFI_CONNECT_RETRY_MS    = 500;
+
+// ─── ESP-NOW PAYLOAD (must match esp32c6_espnow_sender.ino) ────────────────
+
+struct __attribute__((packed)) EspNowPayload {
+  uint32_t magic;
+  uint32_t seq;
+  uint32_t uptime_ms;
+};
+static const uint32_t ESPNOW_MAGIC = 0xC6E50001;
 
 // ─── GLOBALS ────────────────────────────────────────────────────────────────
 
@@ -56,8 +81,8 @@ static WiFiUDP udp;
 static IPAddress aggIP;
 static uint32_t seqNum        = 0;
 static bool     wifiConnected = false;
-static unsigned long lastFrameMs = 0;
-static const unsigned long frameIntervalMs = 1000 / SAMPLE_RATE_HZ;
+static bool     espnowReady   = false;
+static unsigned long lastStatMs = 0;
 
 // Runtime-configurable parameters (can be changed via Serial commands)
 static char     cfgSsid[33]   = WIFI_SSID;
@@ -68,17 +93,57 @@ static uint8_t  cfgNodeId     = CSI_NODE_ID;
 
 // ─── ADR-018 PACKET BUFFER ─────────────────────────────────────────────────
 
-// Maximum packet: 20-byte header + 64 subcarriers * 1 antenna * 2 bytes = 148
-static uint8_t pktBuf[256];
+static uint8_t pktBuf[20 + IQ_BUF_BYTES];
 
-// CSI callback data (written by WiFi task, read by loop())
-static volatile bool     csiReady    = false;
-static volatile int8_t   lastRssi    = -80;
-static volatile int8_t   lastNoise   = -90;
-static int8_t  iqBuffer[256];          // I/Q pairs from last callback
-static volatile uint16_t iqLen       = 0;
-static volatile uint8_t  csiAntennas = 1;
-static volatile uint16_t csiSubcarriers = 0;
+// ─── CSI QUEUE ──────────────────────────────────────────────────────────────
+// The CSI callback (WiFi task) pushes samples here; loop() pops them and sends
+// UDP. A queue instead of one shared buffer means a burst from the C6 is not
+// dropped just because loop() was busy.
+
+struct CsiSample {
+  int8_t   rssi;
+  int8_t   noise;
+  uint16_t len;                  // valid bytes in buf (always even)
+  int8_t   buf[IQ_BUF_BYTES];    // (imag, real) int8 pairs
+};
+
+static const int CSI_QUEUE_DEPTH = 32;
+static QueueHandle_t csiQueue = NULL;
+
+// Counters written by WiFi-task callbacks, read by loop()
+static volatile uint32_t csiQueued    = 0;   // samples accepted into the queue
+static volatile uint32_t csiDropped   = 0;   // queue full
+static volatile uint32_t csiFiltered  = 0;   // CSI from a MAC that is not the C6
+static volatile uint32_t espnowRxCount = 0;  // valid ESP-NOW packets from the C6
+
+// The C6's MAC. CSI frames from any other transmitter are discarded.
+static uint8_t txMac[6]        = {0};
+static volatile bool txMacKnown    = false;
+static volatile bool txMacAnnounce = false;  // loop() prints the MAC once
+
+// ─── ESP-NOW RECEIVE CALLBACK ───────────────────────────────────────────────
+
+/**
+ * Called by the WiFi driver for each ESP-NOW packet. Used only to learn the
+ * C6's MAC (the CSI itself comes from csi_callback). No Serial here.
+ */
+static void espnow_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
+  if (!info || !data || len != (int)sizeof(EspNowPayload)) return;
+
+  EspNowPayload pkt;
+  memcpy(&pkt, data, sizeof(pkt));
+  if (pkt.magic != ESPNOW_MAGIC) return;
+
+  espnowRxCount++;
+
+#ifndef TX_MAC
+  if (!txMacKnown || memcmp(txMac, info->src_addr, 6) != 0) {
+    memcpy(txMac, info->src_addr, 6);
+    txMacKnown = true;
+    txMacAnnounce = true;
+  }
+#endif
+}
 
 // ─── CSI CALLBACK ───────────────────────────────────────────────────────────
 
@@ -89,21 +154,28 @@ static volatile uint16_t csiSubcarriers = 0;
 static void csi_callback(void *ctx, wifi_csi_info_t *info) {
   if (!info || !info->buf || info->len <= 0) return;
 
-  lastRssi = info->rx_ctrl.rssi;
-  lastNoise = info->rx_ctrl.noise_floor;
-  csiAntennas = 1;  // ESP32-S3 single-antenna CSI by default
+  // Keep only CSI measured from the C6's transmissions.
+  if (!txMacKnown || memcmp(info->mac, txMac, 6) != 0) {
+    csiFiltered++;
+    return;
+  }
 
-  // Each subcarrier produces 2 bytes (I, Q)
-  uint16_t n_sc = info->len / 2;
-  if (n_sc > MAX_SUBCARRIERS) n_sc = MAX_SUBCARRIERS;
-  csiSubcarriers = n_sc;
+  CsiSample s;
+  s.rssi  = info->rx_ctrl.rssi;
+  s.noise = info->rx_ctrl.noise_floor;
 
-  uint16_t copyLen = n_sc * 2;
-  if (copyLen > sizeof(iqBuffer)) copyLen = sizeof(iqBuffer);
-  memcpy(iqBuffer, info->buf, copyLen);
-  iqLen = copyLen;
+  // Each subcarrier produces 2 bytes (imag, real)
+  uint16_t len = info->len;
+  if (len > IQ_BUF_BYTES) len = IQ_BUF_BYTES;
+  len &= ~1;
+  s.len = len;
+  memcpy(s.buf, info->buf, len);
 
-  csiReady = true;
+  if (xQueueSend(csiQueue, &s, 0) == pdTRUE) {
+    csiQueued++;
+  } else {
+    csiDropped++;
+  }
 }
 
 // ─── ADR-018 PACKET BUILDER ────────────────────────────────────────────────
@@ -112,12 +184,10 @@ static void csi_callback(void *ctx, wifi_csi_info_t *info) {
  * Build an ADR-018 binary CSI frame in pktBuf.
  * @return total packet length in bytes
  */
-static uint16_t buildAdr018Packet() {
-  uint8_t  nAnt  = csiAntennas;
-  uint16_t nSc   = csiSubcarriers;
-  uint32_t freq  = 2412 + (CSI_WIFI_CHANNEL - 1) * 5;  // approximate MHz
-  int8_t   rssi  = lastRssi;
-  int8_t   noise = lastNoise;
+static uint16_t buildAdr018Packet(int8_t rssi, int8_t noise, const int8_t *iq, uint16_t iqLen) {
+  uint8_t  nAnt  = 1;                       // ESP32-S3 single-antenna CSI
+  uint16_t nSc   = iqLen / 2;
+  uint32_t freq  = 2412 + (WiFi.channel() - 1) * 5;  // MHz, from the real channel
 
   // Header (20 bytes, little-endian)
   uint16_t off = 0;
@@ -135,17 +205,8 @@ static uint16_t buildAdr018Packet() {
   pktBuf[off++] = 0;                                     // reserved
 
   // I/Q payload
-  uint16_t iqBytes = nAnt * nSc * 2;
-  if (iqBytes > sizeof(pktBuf) - HEADER_SIZE) {
-    iqBytes = sizeof(pktBuf) - HEADER_SIZE;
-  }
-  if (iqLen > 0 && iqLen <= iqBytes) {
-    memcpy(pktBuf + off, iqBuffer, iqLen);
-    off += iqLen;
-  } else if (iqBytes > 0) {
-    memcpy(pktBuf + off, iqBuffer, iqBytes);
-    off += iqBytes;
-  }
+  memcpy(pktBuf + off, iq, iqLen);
+  off += iqLen;
 
   seqNum++;
   return off;
@@ -157,6 +218,7 @@ static void connectWiFi() {
   Serial.printf("[CSI] Connecting to WiFi SSID: %s\n", cfgSsid);
 
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);   // modem sleep makes the radio miss ESP-NOW frames
   WiFi.begin(cfgSsid, cfgPass);
 
   int retries = 0;
@@ -168,15 +230,33 @@ static void connectWiFi() {
 
   if (WiFi.status() == WL_CONNECTED) {
     wifiConnected = true;
-    Serial.printf("\n[CSI] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("\n[CSI] Connected! IP: %s  channel: %d\n",
+                  WiFi.localIP().toString().c_str(), WiFi.channel());
   } else {
     wifiConnected = false;
     Serial.println("\n[CSI] WiFi connection failed — will retry.");
   }
 }
 
+static void printMac(const uint8_t *mac) {
+  Serial.printf("%02X:%02X:%02X:%02X:%02X:%02X",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+static void enableEspNow() {
+  if (espnowReady) return;   // stays initialised across WiFi reconnects
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("[ESPNOW] ERROR: esp_now_init() failed");
+    return;
+  }
+  esp_now_register_recv_cb(espnow_recv_cb);
+  espnowReady = true;
+  Serial.println("[ESPNOW] Listening for the C6");
+}
+
 static void enableCSI() {
-  // Enable promiscuous mode (required for CSI callbacks)
+  // Promiscuous mode is kept on so CSI is delivered for every frame the radio
+  // hears; csi_callback() then discards everything that is not from the C6.
   esp_wifi_set_promiscuous(true);
 
   // Configure CSI collection
@@ -193,8 +273,10 @@ static void enableCSI() {
   esp_wifi_set_csi_rx_cb(csi_callback, NULL);
   esp_wifi_set_csi(true);
 
+  enableEspNow();
+
   Serial.printf("[CSI] CSI enabled on channel %d (node %d)\n",
-                CSI_WIFI_CHANNEL, cfgNodeId);
+                WiFi.channel(), cfgNodeId);
   Serial.printf("[CSI] Streaming to %s:%d (ADR-018 format)\n",
                 cfgAggIp, cfgAggPort);
 }
@@ -251,10 +333,16 @@ static void handleSerialCommand(const String &line) {
     Serial.printf("  SSID:       %s\n", cfgSsid);
     Serial.printf("  WiFi:       %s\n", wifiConnected ? "connected" : "disconnected");
     Serial.printf("  IP:         %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("  Channel:    %d\n", WiFi.channel());
     Serial.printf("  Aggregator: %s:%d\n", cfgAggIp, cfgAggPort);
     Serial.printf("  Node ID:    %d\n", cfgNodeId);
-    Serial.printf("  Frames:     %u\n", seqNum);
-    Serial.printf("  Channel:    %d\n", CSI_WIFI_CHANNEL);
+    Serial.printf("  Frames sent:%u\n", seqNum);
+    Serial.print ("  C6 MAC:     ");
+    if (txMacKnown) printMac(txMac); else Serial.print("(not seen yet)");
+    Serial.println();
+    Serial.printf("  ESP-NOW rx: %u packets from the C6\n", (unsigned)espnowRxCount);
+    Serial.printf("  CSI:        %u queued, %u dropped (queue full), %u from other MACs\n",
+                  (unsigned)csiQueued, (unsigned)csiDropped, (unsigned)csiFiltered);
     Serial.println("──────────────────────────────────");
   }
   else if (cmd == "help") {
@@ -275,11 +363,26 @@ void setup() {
   Serial.println();
   Serial.println("╔══════════════════════════════════════════════════╗");
   Serial.println("║  ESP32-S3 CSI Node — Arduino IDE (ADR-018)      ║");
-  Serial.printf( "║  Node ID: %-3d    Channel: %-2d                    ║\n",
-                 cfgNodeId, CSI_WIFI_CHANNEL);
+  Serial.printf( "║  Node ID: %-3d    Link: C6 -> S3 via ESP-NOW      ║\n",
+                 cfgNodeId);
   Serial.println("╚══════════════════════════════════════════════════╝");
 
   aggIP.fromString(cfgAggIp);
+
+  csiQueue = xQueueCreate(CSI_QUEUE_DEPTH, sizeof(CsiSample));
+  if (!csiQueue) {
+    Serial.println("[CSI] FATAL: could not allocate CSI queue");
+    while (true) delay(1000);
+  }
+
+#ifdef TX_MAC
+  const uint8_t pinned[6] = TX_MAC;
+  memcpy(txMac, pinned, 6);
+  txMacKnown = true;
+  Serial.print("[ESPNOW] Using pinned C6 MAC ");
+  printMac(txMac);
+  Serial.println();
+#endif
 
   connectWiFi();
 
@@ -313,26 +416,34 @@ void loop() {
     return;
   }
 
-  // Rate-limit CSI frame transmission
-  unsigned long now = millis();
-  if (now - lastFrameMs < frameIntervalMs) return;
-  lastFrameMs = now;
+  if (txMacAnnounce) {
+    txMacAnnounce = false;
+    Serial.print("[ESPNOW] Learned C6 MAC ");
+    printMac(txMac);
+    Serial.println();
+  }
 
-  // Send CSI frame if new data is available
-  if (csiReady) {
-    csiReady = false;
-
-    uint16_t pktLen = buildAdr018Packet();
+  // Drain queued CSI samples and forward each one to the PC. The cap keeps
+  // Serial commands and reconnects responsive if the queue is full.
+  CsiSample s;
+  for (int i = 0; i < CSI_QUEUE_DEPTH && xQueueReceive(csiQueue, &s, 0) == pdTRUE; i++) {
+    uint16_t pktLen = buildAdr018Packet(s.rssi, s.noise, s.buf, s.len);
 
     udp.beginPacket(aggIP, cfgAggPort);
     udp.write(pktBuf, pktLen);
     udp.endPacket();
+  }
 
-    // Print status every 100 frames
-    if (seqNum % 100 == 0) {
-      Serial.printf("[CSI] Frame %u | RSSI: %d dBm | %d subcarriers | -> %s:%d\n",
-                    seqNum, (int)lastRssi, (int)csiSubcarriers,
-                    cfgAggIp, cfgAggPort);
+  // Print a status line every 5 s
+  unsigned long now = millis();
+  if (now - lastStatMs >= 5000) {
+    lastStatMs = now;
+    Serial.printf("[CSI] sent %u | queue drops %u | ignored (other MACs) %u | ESP-NOW rx %u\n",
+                  seqNum, (unsigned)csiDropped, (unsigned)csiFiltered,
+                  (unsigned)espnowRxCount);
+    if (!txMacKnown) {
+      Serial.println("[CSI] No packets from the C6 yet — check that it is running "
+                     "and on the same WiFi network.");
     }
   }
 }
