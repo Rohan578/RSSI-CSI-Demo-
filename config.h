@@ -1,76 +1,66 @@
 /*
  * ============================================================================
- *  config.h  -  SETTINGS for the CSI transmitter
- *               (works on ESP32, ESP32-C6 SuperMini and ESP32-C3)
+ *  config.h  -  SETTINGS for the ESP32-S3 CSI receiver
  * ============================================================================
  *  This is the only file you normally edit. After changing it, click Upload.
- *
- *  !!! EVERY BOARD NEEDS ITS OWN NODE_ID. !!!
- *  Write down where each node is placed in the room.
  * ============================================================================
  */
 #pragma once
 
 /* ---------------------------------------------------------------------------
- *  1. Node ID  (1 to 254, different on every transmitter)
- *     Also becomes the last byte of the board's MAC address:
- *     NODE_ID 3  ->  MAC 1a:00:00:00:00:03
- *
- *     Tip: give each chip type its own range so logs are easy to read,
- *     e.g. ESP32 = 1-19, C6 = 20-39, C3 = 40-59.
+ *  1. WiFi access point
+ *     Must be 2.4 GHz, WPA2, on a FIXED channel (not "auto").
+ *     When the S3 connects it prints the channel - set WIFI_CHANNEL on
+ *     every transmitter to that number.
  * ------------------------------------------------------------------------- */
-#define NODE_ID                 2
+#define WIFI_SSID               "ORBI21"
+#define WIFI_PASSWORD           "yellowsun456"
 
 /* ---------------------------------------------------------------------------
- *  2. WiFi channel  (1 to 13)
- *     MUST match the channel your access point is fixed to.
- *     The S3 receiver prints the access point's channel when it starts -
- *     use that number here, on every transmitter.
+ *  2. Raspberry Pi (where the CSI data goes)
+ *     The Pi's IP address on the access point's network. Find it on the
+ *     Pi with:  hostname -I
+ *     Tip: in the access point's settings, give the Pi a "DHCP reservation"
+ *     (a fixed IP) so this never changes.
  * ------------------------------------------------------------------------- */
-#define WIFI_CHANNEL            11
+#define PI_SERVER_IP            "192.168.1.50"
+#define PI_SERVER_PORT          5005        /* Must match UDP_PORT in server.py */
 
 /* ---------------------------------------------------------------------------
- *  3. Packets per second
- *     More = finer detail in time, but more airtime used.
- *     50 is a good start with several nodes. Use the SAME value on every node.
+ *  3. Receiver ID  (1 to 255)
+ *     Only matters if you add a second receiver later - give each its own.
  * ------------------------------------------------------------------------- */
-#define SEND_RATE_HZ            50
+#define RECEIVER_ID             1
 
 /* ---------------------------------------------------------------------------
- *  4. Transmit power in dBm  (2 to 20)
- *     Use the SAME value on every node so they're equally loud.
- *     15 is a level every ESP32 chip can reach reliably.
+ *  4. Which transmitters to listen to
+ *     Transmitters use MAC addresses 1a:00:00:00:00:<NODE_ID>.
+ *     Packets from any other device are ignored.
  * ------------------------------------------------------------------------- */
-#define TX_POWER_DBM            15
+#define NODE_MAC_PREFIX         { 0x1a, 0x00, 0x00, 0x00, 0x00 }
 
 /* ---------------------------------------------------------------------------
- *  5. Status LED  (blinks once per second while sending)
- *     Picked automatically from the board you select in Tools > Board:
- *       ESP32 Dev Module   -> GPIO 2  (blue LED on most DevKits)
- *       ESP32C6 Dev Module -> GPIO 15 (plain LED on the C6 SuperMini)
- *       ESP32C3 Dev Module -> GPIO 8  (C3 SuperMini, lights when LOW)
- *     To force a pin, replace the whole block with two lines, e.g.:
- *       #define STATUS_LED_GPIO        15
- *       #define STATUS_LED_ACTIVE_LOW  0
- *     Use -1 to turn the LED off. If it's ON when it should be OFF,
- *     flip STATUS_LED_ACTIVE_LOW.
+ *  5. Batching (how CSI samples are packed into UDP packets to the Pi)
+ *     A batch is sent when it's full or BATCH_FLUSH_MS old, whichever first.
+ *     1400 bytes fits in one WiFi frame.
  * ------------------------------------------------------------------------- */
-#if CONFIG_IDF_TARGET_ESP32C6
-  #define STATUS_LED_GPIO       15
-  #define STATUS_LED_ACTIVE_LOW 0
-#elif CONFIG_IDF_TARGET_ESP32C3
-  #define STATUS_LED_GPIO       8
-  #define STATUS_LED_ACTIVE_LOW 1
-#elif CONFIG_IDF_TARGET_ESP32
-  #define STATUS_LED_GPIO       2
-  #define STATUS_LED_ACTIVE_LOW 0
-#else
-  #define STATUS_LED_GPIO       -1
-  #define STATUS_LED_ACTIVE_LOW 0
-#endif
+#define MAX_UDP_PAYLOAD         1400        /* Bytes per UDP packet */
+#define BATCH_FLUSH_MS          50          /* Max time a sample waits */
+#define CSI_QUEUE_LENGTH        64          /* Samples buffered between tasks */
 
 /* ---------------------------------------------------------------------------
- *  6. Serial Monitor (set it to 115200 baud)
+ *  6. Status LED
+ *     -2 = use the board's built-in LED (LED_BUILTIN). On the ESP32-S3
+ *          DevKitC that's the RGB LED, which lights white.
+ *     Any other number = that GPIO. -1 = no LED.
+ *     Meaning:  off = no WiFi | solid = WiFi OK, no CSI yet | blinking = working
+ *     Seeed XIAO ESP32S3: use 21 and STATUS_LED_ACTIVE_LOW 1.
+ * ------------------------------------------------------------------------- */
+#define STATUS_LED_GPIO         -2
+#define STATUS_LED_ACTIVE_LOW   0
+
+/* ---------------------------------------------------------------------------
+ *  7. Serial Monitor (set it to 115200 baud)
  * ------------------------------------------------------------------------- */
 #define SERIAL_BAUD             115200
-#define STATS_PRINT_INTERVAL_MS 5000     /* How often counters print */
+#define STATS_PRINT_INTERVAL_MS 5000

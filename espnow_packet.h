@@ -3,7 +3,7 @@
  *  espnow_packet.h  -  What is inside each packet a transmitter sends
  * ============================================================================
  *
- *  !!! The S3 receiver sketch has an identical copy of this file.
+ *  !!! The transmitter sketch has an identical copy of this file.
  *  !!! If you change one, change the other.
  *
  *  The packet's real job is just to EXIST: the S3 measures CSI on the
