@@ -23,7 +23,7 @@ PI_WIFI="${PI_WIFI:-192.168.1.50}"       # Pi on linksys222 (set by setup_pi.sh)
 KEY="${KEY:-$HOME/.ssh/id_ed25519}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET="$PI_USER@$PI_ETH"
-SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -i "$KEY")
+SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -o IdentitiesOnly=yes -i "$KEY")
 
 echo "== Pi at $TARGET"
 if ! timeout 5 bash -c "</dev/tcp/$PI_ETH/22" 2>/dev/null; then
@@ -54,11 +54,13 @@ fi
 
 echo "== 3. WiFi password for the Pi"
 PSK="${CSI_WIFI_PSK:-}"
-if [ -z "$PSK" ] && command -v nmcli >/dev/null; then
+if [ "$PSK" = "keep" ]; then
+  PSK=""; echo "Keeping the WiFi password the Pi already has."
+elif [ -z "$PSK" ] && command -v nmcli >/dev/null; then
   PSK=$(nmcli -s -g 802-11-wireless-security.psk connection show linksys222 2>/dev/null || true)
 fi
-if [ -z "$PSK" ]; then
-  read -rsp "linksys222 WiFi password (Enter = keep what the Pi already has): " PSK; echo
+if [ -z "$PSK" ] && [ "${CSI_WIFI_PSK:-}" != "keep" ]; then
+  read -rsp "linksys222 WiFi password (Enter = keep what the Pi already has): " PSK || true; echo
 fi
 if [ -n "$PSK" ]; then
   printf '%s' "$PSK" | ssh "${SSH_OPTS[@]}" "$TARGET" 'umask 077; cat > ~/csi/.wifi_psk'
@@ -78,10 +80,12 @@ Host csi-pi
     HostName $PI_WIFI
     User $PI_USER
     IdentityFile $KEY
+    IdentitiesOnly yes
 Host csi-pi-eth
     HostName $PI_ETH
     User $PI_USER
     IdentityFile $KEY
+    IdentitiesOnly yes
 EOF
   echo "Added: ssh csi-pi (via linksys222)   ssh csi-pi-eth (via the cable)"
 else

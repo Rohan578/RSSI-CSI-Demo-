@@ -41,12 +41,12 @@ warn() { echo "!!! $*"; }
 
 # ---------------------------------------------------------------------------
 step "1/7 Python packages"
-if python3 -c "import flask, numpy, sklearn, joblib" 2>/dev/null && command -v nmap >/dev/null && [ -x /usr/sbin/dnsmasq ]; then
+if python3 -c "import flask, numpy, sklearn, joblib" 2>/dev/null && command -v nmap >/dev/null && [ -x /usr/sbin/dnsmasq ] && command -v ethtool >/dev/null && command -v iw >/dev/null; then
   echo "Already installed."
 elif curl -fsS -m 8 -o /dev/null http://deb.debian.org/ 2>/dev/null || ping -c1 -W3 1.1.1.1 >/dev/null 2>&1; then
   apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-flask python3-numpy python3-sklearn \
-      python3-joblib nmap dnsmasq-base iw rfkill
+      python3-joblib nmap dnsmasq-base iw rfkill ethtool
 else
   warn "No internet and packages missing. Plug the Pi into the laptop's ethernet and run again."
   exit 1
@@ -65,6 +65,17 @@ nmcli radio wifi on || true
 echo "WiFi profiles already on this Pi (left untouched):"
 nmcli -t -f NAME,TYPE,AUTOCONNECT connection show | awk -F: '$2 ~ /wireless/ {print "   " $1 " (autoconnect " $3 ")"}' | grep -v "$CON" || echo "   (none)"
 echo "Currently on WiFi: $(nmcli -t -f DEVICE,CONNECTION device | awk -F: -v d="$WIFI_IF" '$1==d {print $2}')"
+
+# Raspberry Pi 5 + some laptop/switch ports: Energy-Efficient Ethernet (EEE)
+# makes the cable link drop 2 of every 3 packets. Turn it off on every link-up.
+cat > /etc/NetworkManager/dispatcher.d/90-csi-eee-off <<'EOF2'
+#!/bin/sh
+# Raspberry Pi 5: EEE on eth0 causes periodic packet loss. (written by setup_pi.sh)
+[ "$1" = "eth0" ] || exit 0
+case "$2" in pre-up|up) /usr/sbin/ethtool --set-eee eth0 eee off 2>/dev/null || true ;; esac
+EOF2
+chmod 755 /etc/NetworkManager/dispatcher.d/90-csi-eee-off
+ethtool --set-eee eth0 eee off 2>/dev/null && echo "Energy-Efficient Ethernet: off (eth0)" || true
 
 # ---------------------------------------------------------------------------
 step "3/7 Join $SSID as $PI_IP"
@@ -87,26 +98,37 @@ nmcli connection add type wifi ifname "$WIFI_IF" con-name "$CON" ssid "$SSID" \
 PSK=""
 [ -f "$PSK_FILE" ] && { shred -u "$PSK_FILE" 2>/dev/null || rm -f "$PSK_FILE"; }
 
+WIFI_UP=1
 if ! nmcli --wait 40 connection up "$CON"; then
+  WIFI_UP=0
   if [ "$WIFI_BAND" = "a" ]; then
     warn "Could not join on 5 GHz - trying either band"
     nmcli connection modify "$CON" 802-11-wireless.band ""
-    nmcli --wait 40 connection up "$CON" || { warn "Could not join $SSID. Wrong password? AP off?"; exit 1; }
-  else
-    warn "Could not join $SSID. Wrong password? AP off?"; exit 1
+    if nmcli --wait 40 connection up "$CON"; then WIFI_UP=1
+    else nmcli connection modify "$CON" 802-11-wireless.band "$WIFI_BAND"; fi
   fi
 fi
-iw dev "$WIFI_IF" set power_save off 2>/dev/null || true
-iw dev "$WIFI_IF" link | sed -n 's/^\s*\(SSID\|freq\|signal\|tx bitrate\)/   &/p'
+if [ "$WIFI_UP" = 1 ]; then
+  iw dev "$WIFI_IF" set power_save off 2>/dev/null || true
+  iw dev "$WIFI_IF" link | sed -n 's/^\s*\(SSID\|freq\|signal\|tx bitrate\)/   &/p'
+else
+  warn "Could not join $SSID (AP off or out of range? wrong password?)."
+  warn "Continuing: the Pi keeps trying by itself (autoconnect). Re-run this script once"
+  warn "$SSID is on the air, to set up the DHCP server (steps 4-5)."
+fi
 
 # ---------------------------------------------------------------------------
 step "4/7 Is anyone else handing out addresses on $SSID?"
-systemctl stop csi-dhcp 2>/dev/null || true
 OTHER_DHCP=""
-if command -v nmap >/dev/null; then
-  OUT="$(timeout 25 nmap --script broadcast-dhcp-discover --script-args broadcast-dhcp-discover.timeout=8 -e "$WIFI_IF" 2>/dev/null || true)"
-  if echo "$OUT" | grep -q "IP Offered"; then
-    OTHER_DHCP="$(echo "$OUT" | grep -E "Server Identifier|IP Offered|Subnet Mask|Router" | sed 's/^/   /')"
+if [ "$WIFI_UP" != 1 ]; then
+  echo "Skipped - not on $SSID yet."
+else
+  systemctl stop csi-dhcp 2>/dev/null || true      # so we don't just hear ourselves
+  if command -v nmap >/dev/null; then
+    OUT="$(timeout 25 nmap --script broadcast-dhcp-discover --script-args broadcast-dhcp-discover.timeout=8 -e "$WIFI_IF" 2>/dev/null || true)"
+    if echo "$OUT" | grep -q "IP Offered"; then
+      OTHER_DHCP="$(echo "$OUT" | grep -E "Server Identifier|IP Offered|Subnet Mask|Router" | sed 's/^/   /')"
+    fi
   fi
 fi
 if [ -n "$OTHER_DHCP" ]; then
@@ -114,13 +136,15 @@ if [ -n "$OTHER_DHCP" ]; then
   echo "$OTHER_DHCP"
   warn "NOT starting the Pi's DHCP server (two would fight). The fixed addresses still work"
   warn "if that network is 192.168.1.x - otherwise change PI_IP here and in the S3's config.h."
-else
+elif [ "$WIFI_UP" = 1 ]; then
   echo "Nobody answered - the Pi will hand out addresses."
 fi
 
 # ---------------------------------------------------------------------------
 step "5/7 DHCP server on $WIFI_IF only"
-if [ -z "$OTHER_DHCP" ]; then
+if [ "$WIFI_UP" != 1 ]; then
+  echo "Skipped - re-run setup_pi.sh once $SSID is on the air."
+elif [ -z "$OTHER_DHCP" ]; then
   if systemctl is-active --quiet dnsmasq 2>/dev/null; then
     warn "A system-wide dnsmasq service is running; it may clash. Check: systemctl status dnsmasq"
   fi

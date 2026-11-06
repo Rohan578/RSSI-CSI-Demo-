@@ -20,13 +20,15 @@
 #  The WiFi password is wiped from the boot partition after it's been used.
 #
 #  WiFi password: $CSI_WIFI_PSK if set, otherwise you're asked.
+#  SSH keys allowed to log in: KEYS="key1.pub key2.pub" (default: ~/.ssh/id_ed25519.pub).
+#  A key WITHOUT a passphrase (e.g. one made for scripts/agents) lets tools log in unattended.
 #  Re-running is fine: a new cloud-init instance id makes the Pi apply the
 #  files again on its next boot.
 # ============================================================================
 set -euo pipefail
 BOOT="${1:?usage: $0 <mounted boot partition, e.g. /run/media/$USER/bootfs>}"
 PI_USER="${PI_USER:-csi}"
-KEY="${KEY:-$HOME/.ssh/id_ed25519.pub}"
+KEYS="${KEYS:-${KEY:-$HOME/.ssh/id_ed25519.pub}}"
 SSID="${SSID:-linksys222}"
 PI_IP="${PI_IP:-192.168.1.50}"
 PREFIX="${PREFIX:-24}"
@@ -34,8 +36,11 @@ COUNTRY="${COUNTRY:-US}"
 
 [ -f "$BOOT/cmdline.txt" ] && [ -f "$BOOT/user-data" ] && [ -f "$BOOT/meta-data" ] || {
   echo "$BOOT doesn't look like a Raspberry Pi OS (cloud-init) boot partition."; exit 1; }
-[ -f "$KEY" ] || { echo "SSH public key $KEY not found (set KEY=...)"; exit 1; }
-PUBKEY="$(head -n1 "$KEY")"
+KEY_LINES=""
+for k in $KEYS; do
+  [ -f "$k" ] || { echo "SSH public key $k not found (set KEYS=...)"; exit 1; }
+  KEY_LINES+="      - $(head -n1 "$k")"$'\n'
+done
 
 PSK="${CSI_WIFI_PSK:-}"
 if [ -z "$PSK" ]; then read -rsp "$SSID WiFi password: " PSK; echo; fi
@@ -69,8 +74,7 @@ users:
     sudo: "ALL=(ALL) NOPASSWD:ALL"
     lock_passwd: true
     ssh_authorized_keys:
-      - $PUBKEY
-
+${KEY_LINES}
 write_files:
   - path: /etc/NetworkManager/system-connections/csi-linksys222.nmconnection
     owner: root:root

@@ -1163,6 +1163,9 @@ Unknown until you measure it. Record the sessions in
 | CSV timestamps wrong after a reboot | No internet on linksys222 means no clock sync. Plug the cable in briefly, or fit the Pi 5's RTC battery |
 | Disk full message | Delete old `data/csi_*.csv` files |
 | `setup_pi.sh`: "Another DHCP server answered" | Something else serves linksys222. Use its subnet, or switch it off |
+| Pi on the cable answers only 1 ping in 3, SSH times out | Energy-Efficient Ethernet between the Pi 5 and the laptop port. `setup_pi.sh` turns it off; by hand: `sudo ethtool --set-eee eth0 eee off` on the Pi |
+| `setup_pi.sh`: "Could not join linksys222" | The AP is off, still booting (Aruba: 3–5 min), or out of range: `nmcli device wifi list` on the Pi should list linksys222. Re-run `setup_pi.sh` once it's on the air, to finish the DHCP step |
+| SSH: "Server accepts key" then "Permission denied" | Your key has a passphrase and no agent holds it. Unlock it with `ssh-add`, or use a key without a passphrase (`KEY=... deploy_to_pi.sh`) |
 
 ---
 
