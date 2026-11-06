@@ -13,11 +13,11 @@
 #  4. Adds "csi-pi" (over linksys222) and "csi-pi-eth" (over the cable)
 #     to ~/.ssh/config, so afterwards:   ssh csi-pi
 #
-#  Needs: SSH enabled on the Pi (sudo systemctl enable --now ssh, or an empty
-#  file named "ssh" on the SD card's boot partition).
+#  Needs: SSH enabled on the Pi with your key - deploy/prepare_sd_card.sh
+#  does that (plus the "csi" user and WiFi) from the SD card.
 # ============================================================================
 set -euo pipefail
-PI_USER="${PI_USER:-basbhat187}"
+PI_USER="${PI_USER:-csi}"
 PI_ETH="${PI_ETH:-10.42.0.222}"          # Pi on the laptop's ethernet link
 PI_WIFI="${PI_WIFI:-192.168.1.50}"       # Pi on linksys222 (set by setup_pi.sh)
 KEY="${KEY:-$HOME/.ssh/id_ed25519}"
@@ -53,12 +53,16 @@ if [ "${1:-}" = "--code" ]; then
 fi
 
 echo "== 3. WiFi password for the Pi"
-PSK=""
-if command -v nmcli >/dev/null; then
+PSK="${CSI_WIFI_PSK:-}"
+if [ -z "$PSK" ] && command -v nmcli >/dev/null; then
   PSK=$(nmcli -s -g 802-11-wireless-security.psk connection show linksys222 2>/dev/null || true)
 fi
-if [ -z "$PSK" ]; then read -rsp "linksys222 WiFi password: " PSK; echo; fi
-printf '%s' "$PSK" | ssh "${SSH_OPTS[@]}" "$TARGET" 'umask 077; cat > ~/csi/.wifi_psk'
+if [ -z "$PSK" ]; then
+  read -rsp "linksys222 WiFi password (Enter = keep what the Pi already has): " PSK; echo
+fi
+if [ -n "$PSK" ]; then
+  printf '%s' "$PSK" | ssh "${SSH_OPTS[@]}" "$TARGET" 'umask 077; cat > ~/csi/.wifi_psk'
+fi
 PSK=""
 
 echo "== 4. Running setup on the Pi (may ask for the Pi password for sudo)"

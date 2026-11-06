@@ -39,8 +39,13 @@ it at 21:12 on Nov 4 associated fine, then timed out waiting for an address. Tha
      4 and 5. Label each board.
    - Each transmitter now scans for linksys222 and copies its channel at boot. It prints
      `[RADIO] Found "linksys222" on channel 11`.
-3. **Enable SSH on the Pi.** Use a keyboard and screen: `sudo systemctl enable --now ssh`.
-   Or put an empty file called `ssh` on the SD card's boot partition.
+3. **Prepare the Pi's SD card**, in a USB reader on the laptop, with
+   `./deploy/prepare_sd_card.sh /run/media/$USER/bootfs`. This gives the Pi:
+   - a user `csi` (your SSH key only);
+   - SSH on;
+   - linksys222 at 192.168.1.50, set up at first boot by cloud-init.
+
+   Alternatively, with a keyboard and screen: `sudo systemctl enable --now ssh`.
 4. **Deploy** (on the laptop, Pi on the ethernet cable): `./deploy/deploy_to_pi.sh`. This:
    - installs your SSH key (`~/.ssh/id_ed25519.pub`);
    - copies the code to `~/csi`;
@@ -66,7 +71,7 @@ join linksys222, and that drops ORBI21 and your internet until you switch back. 
 
 ```bash
 nmcli connection up linksys222     # the normal profile (gets 192.168.1.1xx from the Pi)
-ssh csi-pi                         # = basbhat187@192.168.1.50, with your key
+ssh csi-pi                         # = csi@192.168.1.50, with your key
 nmcli connection up ORBI21         # back to the internet afterwards
 ```
 

@@ -29,7 +29,7 @@ COUNTRY="${COUNTRY:-US}"
 WIFI_IF="${WIFI_IF:-wlan0}"
 CON="csi-linksys222"
 
-PI_USER="${SUDO_USER:-${PI_USER:-basbhat187}}"
+PI_USER="${SUDO_USER:-${PI_USER:-csi}}"
 HOME_DIR="$(getent passwd "$PI_USER" | cut -d: -f6)"
 CSI_DIR="$HOME_DIR/csi"
 PSK_FILE="$CSI_DIR/.wifi_psk"
@@ -71,10 +71,12 @@ step "3/7 Join $SSID as $PI_IP"
 PSK=""
 if [ -f "$PSK_FILE" ]; then PSK="$(cat "$PSK_FILE")"; fi
 if [ -z "$PSK" ] && nmcli -t -f NAME connection show | grep -qx "$CON"; then
-  echo "Keeping the password already saved in $CON."
-else
-  if [ -z "$PSK" ]; then read -rsp "$SSID WiFi password: " PSK; echo; fi
+  # e.g. created at first boot by prepare_sd_card.sh: reuse its password
+  PSK="$(nmcli -s -g 802-11-wireless-security.psk connection show "$CON" 2>/dev/null || true)"
+  [ -n "$PSK" ] && echo "Keeping the password already saved in $CON."
 fi
+if [ -z "$PSK" ]; then read -rsp "$SSID WiFi password: " PSK; echo; fi
+[ -n "$PSK" ] || { warn "No WiFi password - stopping before changing the WiFi setup."; exit 1; }
 nmcli connection delete "$CON" >/dev/null 2>&1 || true
 nmcli connection add type wifi ifname "$WIFI_IF" con-name "$CON" ssid "$SSID" \
   802-11-wireless.band "$WIFI_BAND" \

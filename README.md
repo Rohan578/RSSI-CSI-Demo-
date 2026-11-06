@@ -68,7 +68,7 @@ stops it. Demo data goes to `/tmp/csi-demo`.
 |---|------|-------|---------|
 | 1 | Put the linksys222 WiFi password into the receiver sketch | laptop | `./csi-arduino/deploy/fill_wifi_password.sh` |
 | 2 | Flash the S3 receiver and ONE transmitter, check it works, then flash the other four | Arduino IDE | [ESP32 firmware](#esp32-firmware) |
-| 3 | Enable SSH on the Pi | Pi keyboard + screen | `sudo systemctl enable --now ssh` |
+| 3 | Prepare the Pi's SD card: user `csi`, SSH, linksys222 WiFi | laptop, card in a USB reader | `./csi-arduino/deploy/prepare_sd_card.sh` (see [Deploying](#deploying-to-the-pi)) |
 | 4 | Deploy the Pi software | laptop, Pi on the ethernet cable | `./csi-arduino/deploy/deploy_to_pi.sh` |
 | 5 | Pin the access point's channels | laptop, through the Pi | `./csi-arduino/deploy/ap_tunnel.sh`, then [AP setup](#access-point-setup) |
 | 6 | Place the boards, measure them into `room.json` | basement | [The room](#the-room-zones-placement-roomjson) |
@@ -788,6 +788,37 @@ curl -X POST localhost:5000/api/model/reload      # /room switches to "AI model"
 
 ## Deploying to the Pi
 
+### Step 0: prepare the SD card (`deploy/prepare_sd_card.sh`, on the laptop)
+
+Raspberry Pi OS "trixie" is configured at first boot by **cloud-init**, from the files
+`user-data`, `meta-data` and `network-config` on the card's FAT boot partition. Writing
+those files needs no root, so with the card in a USB reader:
+
+```bash
+lsblk                                          # find the card: partitions "bootfs" + "rootfs"
+udisksctl mount -b /dev/sdX1                   # its bootfs partition
+CSI_WIFI_PSK='<linksys222 password>' ./csi-arduino/deploy/prepare_sd_card.sh /run/media/$USER/bootfs
+udisksctl unmount -b /dev/sdX1 && udisksctl power-off -b /dev/sdX
+```
+
+On its next boot, the Pi gets:
+
+- user **`csi`**: your SSH key only, passwordless sudo. Set a console password later with
+  `sudo passwd csi`.
+- **SSH on**.
+- the WiFi country set, and the radio unblocked.
+- **linksys222 at 192.168.1.50**, never the default route.
+
+Details:
+
+- The script writes a **new cloud-init instance id**. Without that, cloud-init treats the
+  card as "already set up" and ignores the files.
+- The image's original files are kept as `*.orig`.
+- The WiFi password is **wiped from the boot partition** after first use.
+
+Boot the Pi with the ethernet cable to the laptop still plugged in, so it has internet for
+the next step.
+
 ### First time (`deploy/deploy_to_pi.sh`, run on the laptop with the Pi on the cable)
 
 1. Checks SSH is open on `10.42.0.222`. If not, it tells you how to enable it.
@@ -1208,6 +1239,7 @@ RSSI-CSI-Demo-/
       data/                    recordings, calibration, sessions (not in git)
     deploy/
       fill_wifi_password.sh      laptop: password into the receiver configs
+      prepare_sd_card.sh         laptop: Pi SD card -> user csi, SSH, WiFi (cloud-init)
       deploy_to_pi.sh            laptop: key, copy, run setup, ssh aliases
       setup_pi.sh                Pi: packages, WiFi, DHCP, services
       ap_tunnel.sh               laptop: reach the AP's admin page through the Pi

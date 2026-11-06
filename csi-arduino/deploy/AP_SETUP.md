@@ -60,7 +60,7 @@ Save the configuration, then:
 If SSH is enabled on the AP:
 
 ```
-ssh admin@192.168.1.10          # through the Pi: ssh -J basbhat187@10.42.0.222 admin@192.168.1.10
+ssh admin@192.168.1.10          # through the Pi: ssh -J csi@10.42.0.222 admin@192.168.1.10
 g-channel 11 18                 # 2.4 GHz: channel 11, 18 dBm   (per-AP command)
 a-channel 157 18                # 5 GHz:  channel 157, 18 dBm
 ```
