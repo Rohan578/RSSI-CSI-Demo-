@@ -22,17 +22,17 @@ bottom on any computer with the Arduino IDE. It takes about 20 minutes.
 - **The ORBI21 WiFi password.** Only the S3 needs it.
 - The Pi powered on. Check: http://csi-pi.local:5000 opens in a browser on ORBI21.
 
-## 1. Get the code from `main`
+## 1. Get the code from the `flash-ready` branch
 
 Pick one:
 
 ```bash
-git clone https://github.com/Rohan578/RSSI-CSI-Demo-.git     # first time
+git clone -b flash-ready https://github.com/Rohan578/RSSI-CSI-Demo-.git   # first time
 cd RSSI-CSI-Demo-
-git checkout main && git pull                                # every time after that
+git checkout flash-ready && git pull                                    # every time after that
 ```
 
-Or on GitHub: **Code → Download ZIP**, then unzip it.
+Or on GitHub: switch the branch menu to **flash-ready**, then **Code → Download ZIP**, and unzip it.
 
 ## 2. Put the WiFi password into the S3 sketch (S3 only)
 
@@ -121,7 +121,7 @@ it for the S3 in the Orbi app if you can.
 | Serial Monitor shows | Meaning and fix |
 |---|---|
 | `[ERROR] WIFI_PASSWORD in config.h is still the placeholder.` | Step 2 was skipped. Fill in the password, then upload again |
-| `Connecting to "linksys222"....` (forever) | You flashed old settings. Get the code from `main` again (step 1) |
+| `Connecting to "linksys222"....` (forever) | You flashed old settings. Get the code from `flash-ready` again (step 1) |
 | `Still not connected to "ORBI21"` | Wrong password, or the S3 is too far from an ORBI21 access point. Move it closer to test |
 | `[PI] csi-pi.local didn't answer - sending to 172.16.0.75` | The Pi is off, or not on ORBI21. Check http://csi-pi.local:5000. It still works if the Pi really is at 172.16.0.75 |
 | `S3 IP: 172.27.35.x` | It took an address from the second DHCP server, and packets will be lost. Keep `STATIC_IP "172.16.0.240"` (step 2 table) |

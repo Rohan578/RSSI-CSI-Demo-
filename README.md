@@ -78,7 +78,7 @@ stops it. Demo data goes to `/tmp/csi-demo`.
 
 | # | Step | Where | Details |
 |---|------|-------|---------|
-| 1 | Get the code from `main` and put the WiFi password (currently **ORBI21**) into the S3 sketch | any computer | [`csi-arduino/FLASHING.md`](csi-arduino/FLASHING.md), steps 1–2 |
+| 1 | Get the code from this branch (`flash-ready`) and put the WiFi password (currently **ORBI21**) into the S3 sketch | any computer | [`csi-arduino/FLASHING.md`](csi-arduino/FLASHING.md), steps 1–2 |
 | 2 | Flash the S3 receiver and ONE transmitter, check it reaches the Pi, then flash the other four | Arduino IDE | [`csi-arduino/FLASHING.md`](csi-arduino/FLASHING.md), steps 3–6 |
 | 3 | Prepare the Pi's SD card: user `csi`, SSH, linksys222 WiFi | laptop, card in a USB reader | `./csi-arduino/deploy/prepare_sd_card.sh` (see [Deploying](#deploying-to-the-pi)) |
 | 4 | Deploy the Pi software | laptop, Pi on the ethernet cable | `./csi-arduino/deploy/deploy_to_pi.sh` |
@@ -404,7 +404,7 @@ The Serial Monitor runs at **115200 baud**. If an upload won't start, hold **BOO
 plugging in.
 
 > **To flash the boards, follow [`csi-arduino/FLASHING.md`](csi-arduino/FLASHING.md).** It
-> covers getting the code from `main`, adding the password, the exact Arduino settings, and
+> covers getting the code from `flash-ready`, adding the password, the exact Arduino settings, and
 > what the Serial Monitor shows on success and on failure. This section explains how the
 > firmware works.
 
