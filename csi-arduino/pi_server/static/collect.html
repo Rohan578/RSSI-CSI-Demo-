@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volunteer Guide</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f5f4f1; --surface: #fcfcfb; --border: #e3e2dd;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7974;
+    --zone: #eeede9; --zone-border: #d6d5cf;
+    --v1: #2a78d6; --v2: #eb6834; --v3: #1baf7a;
+    --good: #0ca30c; --warning: #fab219; --critical: #d03b3b;
+    --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #111110; --surface: #1a1a19; --border: #2f2f2c;
+      --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #92918a;
+      --zone: #232321; --zone-border: #383835;
+      --v1: #3987e5; --v2: #d95926; --v3: #199e70;
+      --accent: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2f2f2c;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #92918a;
+    --zone: #232321; --zone-border: #383835;
+    --v1: #3987e5; --v2: #d95926; --v3: #199e70;
+    --accent: #3987e5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text-primary);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; }
+  h1 { font-size: 20px; margin: 0; }
+  a { color: var(--accent); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-top: 14px; }
+  .muted { color: var(--text-muted); }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+  .status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted); }
+  .status.good .dot { background: var(--good); } .status.warn .dot { background: var(--warning); }
+  .status.bad .dot { background: var(--critical); }
+  form.setup { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 18px; }
+  label { display: grid; gap: 4px; font-size: 14px; color: var(--text-secondary); }
+  input[type=number], select { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+                               background: var(--bg); color: var(--text-primary); }
+  .checks { display: flex; gap: 14px; align-items: center; padding-top: 6px; }
+  .checks label { display: flex; gap: 6px; align-items: center; color: var(--text-primary); }
+  button { font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border);
+           background: var(--zone); color: var(--text-primary); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--critical); }
+  .phase { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; }
+  .phase .what { font-size: clamp(26px, 5vw, 48px); font-weight: 750; line-height: 1.1; }
+  .phase .how { font-size: clamp(16px, 2.4vw, 22px); color: var(--text-secondary); margin-top: 6px; }
+  .phase .clock { font-size: clamp(48px, 10vw, 96px); font-weight: 750; font-variant-numeric: tabular-nums;
+                  line-height: 1; text-align: right; }
+  .phase.move .what { color: var(--accent); }
+  .phase.empty .what { color: var(--critical); }
+  .layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(220px, 2fr); gap: 14px; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } .phase { grid-template-columns: 1fr; }
+                              .phase .clock { text-align: left; } }
+  .map { position: relative; aspect-ratio: 1 / 1; display: grid; gap: 6px; }
+  .zone { background: var(--zone); border: 2px solid var(--zone-border); border-radius: 10px; position: relative;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 6px; }
+  .zone .name { position: absolute; top: 6px; left: 9px; font-weight: 700; color: var(--text-muted); font-size: 14px; }
+  .zone.next { border-style: dashed; }
+  .badge { font-weight: 750; color: #fff; border-radius: 999px; padding: 6px 14px; font-size: clamp(14px, 2.4vw, 20px);
+           box-shadow: 0 0 0 3px var(--surface); }
+  .badge.small { padding: 2px 8px; font-size: 12px; opacity: .55; }
+  .node { position: absolute; width: 14px; height: 14px; border-radius: 4px; background: var(--text-secondary);
+          transform: translate(-50%, 50%); border: 2px solid var(--surface); }
+  .node.rx { width: 18px; height: 18px; border-radius: 50%; background: var(--text-primary); }
+  .node span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px;
+               color: var(--text-muted); white-space: nowrap; }
+  .compass { font-size: 12px; color: var(--text-muted); text-align: center; margin-bottom: 4px; }
+  .assign { display: grid; gap: 10px; }
+  .assign .who { display: flex; align-items: center; gap: 10px; font-size: clamp(18px, 2.6vw, 26px); font-weight: 650; }
+  .assign .who .sw { width: 22px; height: 22px; border-radius: 6px; }
+  .progress { height: 8px; background: var(--zone); border-radius: 4px; overflow: hidden; margin-top: 12px; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .4s; }
+  .warnbox { border-left: 4px solid var(--warning); padding: 8px 12px; background: var(--zone); border-radius: 8px;
+             margin-top: 12px; display: none; }
+  ol { padding-left: 20px; margin: 8px 0 0; } li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Guided data collection</h1>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <span class="status" id="data-status"><span class="dot"></span><span>checking data&hellip;</span></span>
+      <a href="/room">3D view</a> <a href="/">Dashboard</a>
+    </div>
+  </header>
+
+  <!-- Setup (shown when no session is running) -->
+  <section class="card" id="setup">
+    <form class="setup" id="form" onsubmit="return false">
+      <label>Volunteers in the room at once
+        <select id="volunteers"><option>1</option><option>2</option><option>3</option></select></label>
+      <label>Seconds in each square <input type="number" id="hold" value="20" min="5" max="120"></label>
+      <label>Seconds to walk to the next square <input type="number" id="move" value="6" min="2" max="30"></label>
+      <label>Rounds (every square once per round) <input type="number" id="rounds" value="2" min="1" max="10"></label>
+      <label>Empty-room seconds at the start <input type="number" id="empty" value="30" min="10" max="120"></label>
+      <div style="grid-column: span 2"><div style="font-size:14px;color:var(--text-secondary)">In each square</div>
+        <div class="checks"><label><input type="checkbox" id="act-stand" checked> stand still</label>
+          <label><input type="checkbox" id="act-walk" checked> walk around</label></div></div>
+    </form>
+    <p class="muted" id="estimate"></p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="primary" id="start">Start session</button>
+      <label class="checks" style="padding:0"><input type="checkbox" id="voice" checked> read instructions aloud</label>
+    </div>
+    <div class="warnbox" id="setup-warn"></div>
+    <h3 style="margin:18px 0 0;font-size:16px">Before you start</h3>
+    <ol class="muted">
+      <li>Tape the squares on the floor so volunteers can see them (same letters/numbers as the map below; north = the wall opposite the S3 receiver).</li>
+      <li>All 5 transmitters and the receiver powered, and <b>none of them moved</b> since last time.</li>
+      <li>Phones: airplane mode, or at least not on linksys222. This screen should be on 5 GHz or wired.</li>
+      <li>Everyone outside the room when the session starts (the first step records the empty room).</li>
+    </ol>
+  </section>
+
+  <!-- Running session -->
+  <div class="card phase" id="phase" style="display:none">
+    <div><div class="what" id="what"></div><div class="how" id="how"></div></div>
+    <div class="clock" id="clock"></div>
+  </div>
+  <div class="layout">
+    <div class="card">
+      <div class="compass">&uarr; north wall &middot; S3 receiver on the south wall &darr;</div>
+      <div class="map" id="map"></div>
+    </div>
+    <section id="run" style="display:none">
+      <div class="card">
+        <div class="assign" id="assign"></div>
+        <div class="muted" id="next" style="margin-top:14px"></div>
+        <div class="progress"><i id="bar"></i></div>
+        <div class="muted" id="prog" style="margin-top:6px"></div>
+        <div class="warnbox" id="run-warn"></div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+          <button class="danger" id="stop">Stop session</button>
+          <button id="unmute" style="display:none">Tap to turn on sound</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const COLORS = ['var(--v1)', 'var(--v2)', 'var(--v3)'];
+let room = null, zoneNames = [], lastKey = null, audio = null, lastTick = null;
+
+async function loadRoom() {
+  room = await (await fetch('/api/room')).json();
+  zoneNames = room.zone_names;
+  const cols = room.zones.cols, rows = room.zones.rows;
+  const map = $('map');
+  map.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  map.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  map.innerHTML = '';
+  for (let r = rows; r >= 1; r--) for (let c = 0; c < cols; c++) {
+    const z = String.fromCharCode(65 + c) + r;
+    const d = document.createElement('div');
+    d.className = 'zone'; d.id = 'z-' + z; d.innerHTML = `<span class="name">${z}</span>`;
+    map.appendChild(d);
+  }
+  const addNode = (n, cls, text) => {
+    const el = document.createElement('div');
+    el.className = 'node ' + cls;
+    el.style.left = (100 * n.x / room.width) + '%';
+    el.style.bottom = (100 * n.y / room.depth) + '%';
+    el.innerHTML = `<span>${text}</span>`;
+    map.appendChild(el);
+  };
+  for (const [id, n] of Object.entries(room.transmitters)) addNode(n, 'tx', n.label || 'TX ' + id);
+  for (const [id, n] of Object.entries(room.receivers)) addNode(n, 'rx', n.label || 'RX ' + id);
+}
+
+function settings() {
+  const acts = [];
+  if ($('act-stand').checked) acts.push('stand');
+  if ($('act-walk').checked) acts.push('walk');
+  return { volunteers: +$('volunteers').value, hold_s: +$('hold').value, move_s: +$('move').value,
+           rounds: +$('rounds').value, empty_s: +$('empty').value, activities: acts.length ? acts : ['stand'] };
+}
+function updateEstimate() {
+  const s = settings();
+  const steps = s.rounds * s.activities.length * zoneNames.length;
+  const secs = 3 + (s.move_s + s.empty_s) + steps * (s.move_s + s.hold_s) + (s.move_s + s.empty_s / 2);
+  $('estimate').textContent = `${steps} squares to visit, about ${Math.round(secs / 60)} minutes.`;
+}
+document.querySelectorAll('#form input, #form select').forEach((el) => el.addEventListener('input', updateEstimate));
+
+function ensureAudio() {
+  try {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+  } catch (e) {}
+  $('unmute').style.display = (audio && audio.state === 'running') ? 'none' : '';
+}
+function beep(freq = 880, ms = 160) {
+  if (!audio || audio.state !== 'running') return;
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.frequency.value = freq; g.gain.value = 0.15;
+  o.connect(g); g.connect(audio.destination);
+  o.start(); o.stop(audio.currentTime + ms / 1000);
+}
+function say(text) {
+  if (!$('voice').checked || !window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.replace(/\b([A-Z])(\d)\b/g, '$1 $2'));
+  u.rate = 0.95;
+  speechSynthesis.speak(u);
+}
+
+$('start').onclick = async () => {
+  ensureAudio();
+  say('Starting. Everyone please leave the room.');
+  await fetch('/api/collect/start', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(settings()) });
+};
+$('stop').onclick = async () => {
+  if (!confirm('Stop the session? Data recorded so far is kept.')) return;
+  await fetch('/api/collect/stop', { method: 'POST' });
+  say('Session stopped.');
+};
+$('unmute').onclick = ensureAudio;
+
+function instructions(st, names) {
+  if (st.lead_in || !st.step) return { cls: 'empty', what: 'Get ready', how: 'Everyone outside the room.', speech: '' };
+  const s = st.step;
+  if (s.act === 'empty') {
+    return s.phase === 'move'
+      ? { cls: 'empty', what: 'Everyone OUT of the room', how: 'Leave now, close the door if there is one.',
+          speech: 'Everyone out of the room please.' }
+      : { cls: 'empty', what: 'Room must stay EMPTY', how: 'Recording the empty room. Stay outside and quiet.', speech: '' };
+  }
+  const goes = s.zones.map((z, i) => `${names[i]}: ${z}`).join(', ');
+  if (s.phase === 'move') {
+    return { cls: 'move', what: 'Walk to your square', how: goes,
+             speech: s.zones.map((z, i) => `${names.length > 1 ? names[i] + ', ' : ''}go to ${z}.`).join(' ') };
+  }
+  return s.act === 'stand'
+    ? { cls: 'hold', what: 'Stand still in your square', how: 'Arms down, normal breathing, face any way.', speech: 'Stand still.' }
+    : { cls: 'hold', what: 'Walk around inside your square', how: 'Slowly, stay inside the tape.', speech: 'Walk around inside your square.' };
+}
+
+function render(st) {
+  const running = st.running;
+  $('setup').style.display = running ? 'none' : '';
+  $('run').style.display = running ? '' : 'none';
+  $('phase').style.display = running ? '' : 'none';
+  if (!running) {
+    lastKey = null;
+    document.querySelectorAll('.zone .badge').forEach((b) => b.remove());
+    return;
+  }
+  const names = st.volunteer_names || ['Blue'];
+  const ins = instructions(st, names);
+  $('phase').className = 'card phase ' + ins.cls;
+  $('phase').style.display = '';
+  $('what').textContent = ins.what;
+  $('how').textContent = ins.how;
+  const rem = st.step ? Math.ceil(st.step.remaining) : '';
+  $('clock').textContent = rem;
+
+  const key = st.step ? `${st.step.index}-${st.step.phase}` : 'lead';
+  if (key !== lastKey) {
+    lastKey = key;
+    if (ins.speech) say(ins.speech);
+    beep(st.step && st.step.phase === 'hold' ? 660 : 990, 220);
+  }
+  if (st.step && st.step.phase === 'move' && rem <= 3 && rem >= 1 && lastTick !== key + rem) {
+    lastTick = key + rem; beep(520, 90);
+  }
+
+  document.querySelectorAll('.zone').forEach((z) => {
+    z.classList.remove('next');
+    z.querySelectorAll('.badge').forEach((b) => b.remove());
+  });
+  const zones = st.step ? st.step.zones : [];
+  zones.forEach((z, i) => {
+    const el = $('z-' + z); if (!el) return;
+    const b = document.createElement('span'); b.className = 'badge';
+    b.style.background = COLORS[i]; b.textContent = names[i];
+    el.appendChild(b);
+  });
+  if (st.next && st.step && st.step.phase === 'hold') {
+    st.next.zones.forEach((z, i) => {
+      const el = $('z-' + z); if (!el) return;
+      el.classList.add('next');
+      const b = document.createElement('span'); b.className = 'badge small';
+      b.style.background = COLORS[i]; b.textContent = 'next: ' + names[i];
+      el.appendChild(b);
+    });
+  }
+  $('assign').innerHTML = zones.length
+    ? zones.map((z, i) => `<div class="who"><span class="sw" style="background:${COLORS[i]}"></span>${names[i]} &rarr; ${z}</div>`).join('')
+    : '<div class="who">Nobody in the room</div>';
+  $('next').textContent = st.next
+    ? 'Next: ' + (st.next.act === 'empty' ? 'everyone out' : st.next.zones.map((z, i) => `${names[i]} ${z}`).join(', ') +
+      (st.next.act === 'walk' ? ' (walking)' : ' (standing)'))
+    : 'Last step';
+  const p = st.progress;
+  $('bar').style.width = (100 * p.done / Math.max(1, p.total)) + '%';
+  $('prog').textContent = `Step ${Math.min(p.done + 1, p.total)} of ${p.total} · about ${Math.ceil(st.ends_in / 60)} min left`;
+}
+
+async function pollCollect() {
+  try { render(await (await fetch('/api/collect')).json()); } catch (e) {}
+  setTimeout(pollCollect, 250);
+}
+async function pollData() {
+  try {
+    const s = await (await fetch('/api/state')).json();
+    const total = s.links.length, on = s.links_online;
+    const el = $('data-status');
+    el.className = 'status ' + (on === 0 ? 'bad' : on < total ? 'warn' : 'good');
+    el.lastElementChild.textContent = on === 0 ? 'no WiFi data arriving' : `${on}/${total} radio paths live`;
+    const msg = on === 0 ? 'No CSI is arriving: recording now would be wasted. Check the ESP32-S3 and transmitters.'
+              : on < total ? `Only ${on} of ${total} paths are live: a transmitter is off or out of range.` : '';
+    for (const id of ['setup-warn', 'run-warn']) { $(id).style.display = msg ? 'block' : 'none'; $(id).textContent = msg; }
+  } catch (e) {}
+  setTimeout(pollData, 2000);
+}
+loadRoom().then(() => { updateEstimate(); pollCollect(); pollData(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# Recordings, calibration and trained models stay on the Pi
+pi_server/data/
+pi_server/models/*.joblib
+pi_server/models/*.json
+__pycache__/
+*.pyc
+# Never commit the WiFi password file the deploy script hands to the Pi
+.wifi_psk
