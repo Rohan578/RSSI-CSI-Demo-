@@ -1,0 +1,100 @@
+{
+ "_help": [
+  "Benchmark: 10 transmitters + S3 + C5 (5 GHz, router link)."
+ ],
+ "name": "Basement",
+ "width": 6.1,
+ "depth": 6.1,
+ "height": 2.3,
+ "zones": {
+  "cols": 3,
+  "rows": 3
+ },
+ "receivers": {
+  "1": {
+   "x": 3.05,
+   "y": 0.25,
+   "z": 1.0,
+   "label": "S3 receiver (2.4 GHz)",
+   "band": "2.4"
+  },
+  "2": {
+   "x": 0.6,
+   "y": 0.25,
+   "z": 1.0,
+   "label": "C5 receiver (5 GHz)",
+   "band": "5",
+   "source": "access_point"
+  }
+ },
+ "transmitters": {
+  "1": {
+   "x": 0.25,
+   "y": 1.6,
+   "z": 1.0,
+   "label": "TX 1"
+  },
+  "2": {
+   "x": 0.25,
+   "y": 3.4,
+   "z": 1.0,
+   "label": "TX 2"
+  },
+  "3": {
+   "x": 0.25,
+   "y": 5.2,
+   "z": 1.0,
+   "label": "TX 3"
+  },
+  "4": {
+   "x": 0.9,
+   "y": 5.85,
+   "z": 1.0,
+   "label": "TX 4"
+  },
+  "5": {
+   "x": 2.25,
+   "y": 5.85,
+   "z": 1.0,
+   "label": "TX 5"
+  },
+  "6": {
+   "x": 3.85,
+   "y": 5.85,
+   "z": 1.0,
+   "label": "TX 6"
+  },
+  "7": {
+   "x": 5.2,
+   "y": 5.85,
+   "z": 1.0,
+   "label": "TX 7"
+  },
+  "8": {
+   "x": 5.85,
+   "y": 5.2,
+   "z": 1.0,
+   "label": "TX 8"
+  },
+  "9": {
+   "x": 5.85,
+   "y": 3.4,
+   "z": 1.0,
+   "label": "TX 9"
+  },
+  "10": {
+   "x": 5.85,
+   "y": 1.6,
+   "z": 1.0,
+   "label": "TX 10"
+  }
+ },
+ "access_point": {
+  "x": 5.5,
+  "y": 7.5,
+  "z": 1.5,
+  "label": "Home router",
+  "in_room": false
+ },
+ "furniture": []
+}

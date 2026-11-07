@@ -1,0 +1,8 @@
+# Recordings, calibration and trained models stay on the computer that runs the server
+server/data/
+server/models/*.joblib
+server/models/*.json
+__pycache__/
+*.pyc
+# Arduino build output
+build/
