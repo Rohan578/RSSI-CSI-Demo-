@@ -8,7 +8,7 @@ WiFi** to a **laptop**, which works out roughly where people are and shows them 
 
 This is the **`home-wifi-dual-band`** branch: no Raspberry Pi, no separate access point,
 up to 10 transmitters, and an ESP32-C5 for 5 GHz. The Raspberry Pi version is the
-[`flash-ready`](https://github.com/Rohan578/RSSI-CSI-Demo-/tree/flash-ready) branch
+[`pi-csi-dashboard`](https://github.com/Rohan578/RSSI-CSI-Demo-/tree/pi-csi-dashboard) branch
 (see [Branches](#branches)).
 
 [![The 3D view: a second person walks in and both are tracked (simulation, click for the full video)](docs/media/wifi-sensing-3d-demo.gif)](docs/media/wifi-sensing-3d-demo.mp4)
@@ -338,7 +338,7 @@ Everything runs on one home WiFi network. The layout tested in the house is **OR
 - **Fallbacks:** `SERVER_IP` (a fixed address) or `SERVER_HOST` (an mDNS name such as
   `my-laptop`) in the receiver's `config.h`. Use them only if broadcasts are blocked.
 
-### ORBI21 specifics (measured 2026-11-06 on the flash-ready branch)
+### ORBI21 specifics (measured 2026-11-06 on the pi-csi-dashboard branch)
 
 - **Two DHCP servers.** The Orbi router (`172.16.0.1`) offers 172.16.0.x. A second
   device (`172.16.0.37`, MAC `d0:c5:d3:60:1e:23`) offers 172.27.35.x behind its own NAT,
@@ -467,9 +467,9 @@ together don't start in the same time slot.
 - **USB serial never stalls a receiver** (`Serial.setTxTimeoutMs(0)`), so it runs fine
   without a computer reading the Serial Monitor.
 
-### What changed vs. `flash-ready`
+### What changed vs. `pi-csi-dashboard`
 
-| Problem on `flash-ready` | Fix in this branch | Where |
+| Problem on `pi-csi-dashboard` | Fix in this branch | Where |
 |---|---|---|
 | Transmitters copied the router's channel once at power-up. The Orbi changes its 2.4 GHz channel by itself, and then **all transmitters went silent** until power-cycled | Receiver **channel beacons**; transmitters lock on, follow, and search again by themselves | all three sketches |
 | Up to 10 transmitters on separate clocks can drift into the same time slot and keep colliding | **±2 ms jitter** per packet, plus a start offset per `NODE_ID` | `csi_transmitter` |
@@ -486,7 +486,7 @@ together don't start in the same time slot.
 | Setting | Value | Meaning |
 |---|---|---|
 | `NODE_ID` | **1 to 10, different on each board** | Becomes the last MAC byte and the dashboard's "TX n". Must match `room.json` |
-| `FOLLOW_RECEIVER` | 1 | Follow the receivers' beacons (0 = fixed channel, like flash-ready) |
+| `FOLLOW_RECEIVER` | 1 | Follow the receivers' beacons (0 = fixed channel, like the Pi version) |
 | `AUTO_CHANNEL_SSID` | `"ORBI21"` | Fallback: copy this network's 2.4 GHz channel. `""` = skip |
 | `WIFI_CHANNEL` | 1 | Last-resort fallback channel |
 | `BEACON_DWELL_MS` / `BEACON_LOST_MS` / `SEARCH_RETRY_MS` | 450 / 10000 / 30000 | Search timing |
@@ -860,7 +860,7 @@ python -c "import urllib.request as u; u.urlopen(u.Request('http://localhost:500
    link order, feature version, sklearn version, metrics, sessions, date).
 
 **When to retrain:** a board moved; the router's channel changed for good; big furniture
-changes; `FEATURE_VERSION` changed. Models and calibrations from `flash-ready` are refused
+changes; `FEATURE_VERSION` changed. Models and calibrations from `pi-csi-dashboard` are refused
 with a clear message: calibrate again and retrain.
 
 **Testing training without hardware:** `python benchmark.py --make-sessions 6 --out <dir>`
@@ -945,7 +945,7 @@ The base URL is `http://<laptop>:5000`. Everything is JSON.
 ### UDP packet (receiver → laptop, port 5005), little-endian
 
 One packet = one batch header, then *n* × (sample header + CSI bytes). Defined in
-`csi_packet.h`; it must match `server.py`. Unchanged from `flash-ready` (version 2).
+`csi_packet.h`; it must match `server.py`. Unchanged from `pi-csi-dashboard` (version 2).
 
 **Batch header (12 bytes):** `magic u16 = 0xC51A`, `version u8 = 2`, `receiver_id u8`,
 `batch_seq u32`, `sample_count u8`, 3 reserved bytes.
@@ -1062,12 +1062,12 @@ Geometry mode (no AI model), averaged over 2 seeds. **"Interference" = home-WiFi
 
 | Setup | Interference | err (m) | err standing (m) | right square | 1 person counted right | 2 people | false alarm (empty room) |
 |---|---|---|---|---|---|---|---|
-| **flash-ready code**, 5 TX + S3 | yes | 1.57 | 1.30 | 26% | 82% | 6% | **26%** |
+| **Pi-version code**, 5 TX + S3 | yes | 1.57 | 1.30 | 26% | 82% | 6% | **26%** |
 | this branch, 5 TX + S3 | yes | 1.35 | 1.13 | 30% | 80% | 0% | **0%** |
 | this branch, 10 TX + S3 | yes | 0.91 | 0.67 | 44% | 87% | 17% | 2% |
 | **this branch, 10 TX + S3 + C5 (the planned setup)** | yes | **0.89** | **0.71** | **45%** | 85% | 14% | **0%** |
 | this branch, 10 TX + S3 + 2nd 2.4 GHz receiver + C5 | yes | 0.94 | 0.91 | 44% | 96% | 5% | 3% |
-| flash-ready code, 5 TX + S3 | no (quiet air) | 1.27 | 1.00 | 35% | 83% | 8% | 0% |
+| Pi-version code, 5 TX + S3 | no (quiet air) | 1.27 | 1.00 | 35% | 83% | 8% | 0% |
 | this branch, 10 TX + S3 + C5 | no (quiet air) | 0.92 | 0.63 | 45% | 89% | 12% | 0% |
 
 *err* = median distance between a shown person and the true position (guessing the room's
@@ -1081,7 +1081,7 @@ to almost 1 in 2. In quiet air the new code is no worse than the old.
 
 **With the AI model** (trained on 2 simulated guided sessions, tested on a third):
 
-| | flash-ready code | this branch |
+| | Pi-version code | this branch |
 |---|---|---|
 | Held-out self-test: 1 person, exact square | 72% | **78–80%** |
 | Held-out self-test: square or neighbour | 92% | **94%** |
@@ -1219,7 +1219,7 @@ use; and a fixed, quiet router channel.
 | "Calibration looked busy" | Someone was inside or walking past. Calibrate again |
 | Positions jump around | Expected with one 2.4 GHz receiver. Add transmitters, train the AI model, check no board or cable moves |
 | Model won't load: "scikit-learn version" | Trained on another computer: run `train_model.py` on the laptop that runs the server |
-| Model won't load: "older features" | You updated from `flash-ready`: calibrate again, re-run `train_model.py` |
+| Model won't load: "older features" | You updated from `pi-csi-dashboard`: calibrate again, re-run `train_model.py` |
 | `/collect` silent | The browser blocked sound: tap "Tap to turn on sound" |
 | `/room` blank | Old browser without WebGL or import maps. Use a recent Chrome, Firefox or Safari |
 | Everything stops after a while | The laptop went to sleep or dropped WiFi: turn off sleep while sensing |
@@ -1277,10 +1277,10 @@ subcarriers, and no stable phase. **The approach that works** is the one impleme
 | Branch | What it is |
 |---|---|
 | **`home-wifi-dual-band`** (this one) | Home WiFi, laptop server, up to 10 transmitters, S3 on 2.4 GHz + C5 on 5 GHz, interference filtering |
-| **`flash-ready`** | The Raspberry Pi version: Pi 5 server, 5 transmitters, S3 receiver, ORBI21 or the isolated linksys222 network |
+| **`pi-csi-dashboard`** | The Raspberry Pi version: Pi 5 server (`pi_server/`), 5 transmitters, S3 receiver, ORBI21 or the isolated linksys222 network. It **also contains this version** (`laptop_server/`, `firmware/home-wifi/`, guide in `docs/HOME_WIFI.md`), so one checkout has both |
 
 Older experiments (the first uploads and the first ESP-NOW CSI link with a PC receiver) are
-kept for reference in the `legacy/` folder of the `flash-ready` branch.
+kept for reference in the `legacy/` folder of the `pi-csi-dashboard` branch.
 
 ---
 
@@ -1396,6 +1396,6 @@ record new sessions and retrain.
   the MIT licence (its `LICENSE` is included there).
 - The Python side uses [Flask](https://flask.palletsprojects.com),
   [NumPy](https://numpy.org) and [scikit-learn](https://scikit-learn.org).
-- Built on the `flash-ready` branch's server, 3D view, guided collection, simulator and
+- Built on the `pi-csi-dashboard` branch's server, 3D view, guided collection, simulator and
   hardware notes.
 - The demo videos are simulations made with this repository's own dashboard and simulator.
