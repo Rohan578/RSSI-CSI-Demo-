@@ -11,6 +11,18 @@ Raspberry Pi 5 collects the CSI, works out roughly where people are, and shows i
 people really are, so you can see the estimate's error. Real-room accuracy has to be
 measured with your own data; see [How accurate is it?](#how-accurate-is-it).*
 
+**Demo videos (simulations):**
+
+[![The 3D view: a second person walks in and both are tracked (simulation, click for the full video)](docs/media/wifi-sensing-3d-demo.gif)](docs/media/wifi-sensing-3d-demo.mp4)
+
+*The same 3D view with one, then two people: **[full 61 s video](docs/media/wifi-sensing-3d-demo.mp4)**.
+It was recorded with the 10-transmitter + ESP32-C5 layout of the
+[`home-wifi-dual-band`](https://github.com/Rohan578/RSSI-CSI-Demo-/tree/home-wifi-dual-band) branch,
+and fed ideal detections to show the target behaviour. Two people are usually shown as one
+today (see below).
+**[Animated explainer (26 s)](docs/media/wifi-sensing-explainer.mp4)**: paths, calibration,
+a person crossing paths, and home-WiFi interference being filtered.*
+
 ---
 
 ## Contents
