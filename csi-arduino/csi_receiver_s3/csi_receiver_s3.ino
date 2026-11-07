@@ -64,6 +64,7 @@
 #include <esp_wifi.h>
 #include <esp_now.h>
 #include <esp_timer.h>
+#include <ESPmDNS.h>
 
 #include "config.h"
 #include "csi_packet.h"
@@ -393,6 +394,41 @@ void addToBatch(const CsiQueueItem &item) {
 
 
 /* ============================================================================
+ *  SECTION 8b: FINDING THE PI BY NAME (mDNS)
+ *  A home router can give the Pi a different address after a reboot. The Pi
+ *  announces itself as <PI_SERVER_HOST>.local, so ask for that name at
+ *  start-up and after every WiFi reconnect. If nobody answers, keep the last
+ *  good address (at first: PI_SERVER_IP from config.h).
+ * ========================================================================== */
+static bool mdnsStarted = false;
+
+void findPi(int attempts) {
+  if (strlen(PI_SERVER_HOST) == 0) return;
+  if (!mdnsStarted) {
+    char name[24];
+    snprintf(name, sizeof(name), "csi-receiver-%d", RECEIVER_ID);
+    mdnsStarted = MDNS.begin(name);
+    if (!mdnsStarted) {
+      Serial.println("[PI] mDNS could not start - using PI_SERVER_IP");
+      return;
+    }
+  }
+  for (int i = 0; i < attempts; i++) {
+    IPAddress ip = MDNS.queryHost(PI_SERVER_HOST, 1500);
+    if (ip != IPAddress()) {
+      if (ip != piAddress) {
+        Serial.printf("[PI] Found %s.local at %s\n", PI_SERVER_HOST, ip.toString().c_str());
+      }
+      piAddress = ip;
+      return;
+    }
+  }
+  Serial.printf("[PI] %s.local didn't answer - sending to %s\n",
+                PI_SERVER_HOST, piAddress.toString().c_str());
+}
+
+
+/* ============================================================================
  *  SECTION 9: STATS PRINTER
  *  Prints one line per transmitter. Healthy: every node near its
  *  SEND_RATE_HZ, "queue full" and "UDP errors" at 0.
@@ -436,14 +472,14 @@ void setup() {
   delay(1500);   // Give the USB serial port a moment to come up
 
   Serial.println("==================================================");
-  Serial.printf ("  CSI receiver %d  |  sending to %s:%d\n",
-                 RECEIVER_ID, PI_SERVER_IP, PI_SERVER_PORT);
+  Serial.printf ("  CSI receiver %d  |  sending to %s.local (else %s):%d\n",
+                 RECEIVER_ID, PI_SERVER_HOST, PI_SERVER_IP, PI_SERVER_PORT);
   Serial.println("==================================================");
 
   ledInit();
   ledSet(false);
 
-  if (strcmp(WIFI_PASSWORD, "__LINKSYS222_PSK__") == 0) {
+  if (strcmp(WIFI_PASSWORD, "__WIFI_PASSWORD__") == 0) {
     Serial.println("[ERROR] WIFI_PASSWORD in config.h is still the placeholder.");
     Serial.println("[ERROR] Run deploy/fill_wifi_password.sh (or type it in) and upload again.");
     while (true) delay(1000);
@@ -462,6 +498,7 @@ void setup() {
 
   connectWiFi();
   ledSet(true);
+  findPi(3);        // Before CSI starts, so nothing queues up meanwhile
   udp.begin(0);     // 0 = any free local port for sending
   csiInit();
 }
@@ -489,6 +526,14 @@ void loop() {
   if (batchSamples > 0 && millis() - batchStartMs >= BATCH_FLUSH_MS) {
     flushBatch();
   }
+
+  // --- 2b. After a WiFi reconnect, look the Pi up again (its address may
+  //     have changed). Blocks up to 1.5 s, so a few samples may be dropped
+  //     - only ever right after a reconnect.
+  static bool wasConnected = true;
+  bool connectedNow = (WiFi.status() == WL_CONNECTED);
+  if (connectedNow && !wasConnected) findPi(1);
+  wasConnected = connectedNow;
 
   // --- 3. Status LED ---
   if (WiFi.status() != WL_CONNECTED) {

@@ -66,7 +66,7 @@ stops it. Demo data goes to `/tmp/csi-demo`.
 
 | # | Step | Where | Details |
 |---|------|-------|---------|
-| 1 | Put the linksys222 WiFi password into the receiver sketch | laptop | `./csi-arduino/deploy/fill_wifi_password.sh` |
+| 1 | Put the WiFi password (currently **ORBI21**, see [Network design](#network-design)) into the receiver sketch | laptop | `./csi-arduino/deploy/fill_wifi_password.sh` (then `--clear` after uploading) |
 | 2 | Flash the S3 receiver and ONE transmitter, check it works, then flash the other four | Arduino IDE | [ESP32 firmware](#esp32-firmware) |
 | 3 | Prepare the Pi's SD card: user `csi`, SSH, linksys222 WiFi | laptop, card in a USB reader | `./csi-arduino/deploy/prepare_sd_card.sh` (see [Deploying](#deploying-to-the-pi)) |
 | 4 | Deploy the Pi software | laptop, Pi on the ethernet cable | `./csi-arduino/deploy/deploy_to_pi.sh` |
@@ -262,7 +262,46 @@ but can't be used for positions.
 
 ## Network design
 
-### Addresses
+### Current setup (since 2026-11-06): the home WiFi "ORBI21"
+
+linksys222 went down, so everything now runs on the home network **ORBI21**, which has its
+own router and DHCP. The isolated linksys222 design is kept below; switch back by restoring
+the linksys222 values noted in each `config.h`.
+
+| Device | On ORBI21 | How |
+|---|---|---|
+| Raspberry Pi 5 | DHCP from the Orbi router (172.16.0.75 on 2026-11-06). **Name: `csi-pi.local`** | `deploy/use_home_wifi.sh` (NetworkManager profile `csi-orbi21`) |
+| ESP32-S3 receiver | DHCP (`STATIC_IP ""`) | Finds the Pi **by name** (`PI_SERVER_HOST "csi-pi"`, mDNS) at start-up and after every reconnect. `PI_SERVER_IP` is only the fallback |
+| Transmitters | not on the network | `AUTO_CHANNEL_SSID "ORBI21"`: they copy ORBI21's 2.4 GHz channel at power-up (channel 1 on 2026-11-06) |
+| Laptop | its normal ORBI21 connection | `ssh csi-pi` and `http://csi-pi.local:5000/room` over WiFi; no cable needed |
+
+**Rules on a home network:**
+
+- **The Pi's own DHCP server must never run on ORBI21.** Two DHCP servers would break the
+  house's internet. It isn't installed, and `setup_pi.sh` only ever allows it on linksys222:
+  - it is started by a NetworkManager hook only while connected via `csi-linksys222`;
+  - it refuses to start otherwise.
+
+  Don't run `setup_pi.sh` while the Pi is meant to stay on ORBI21: it switches the Pi back to
+  linksys222.
+- **WiFi passwords never go into git.**
+  - `fill_wifi_password.sh` copies the laptop's saved ORBI21 password into `config.h` for
+    flashing.
+  - `--clear` restores the placeholder.
+  - The repo's `.githooks/pre-commit` refuses a commit with a real password. Enable it once
+    per clone with `git config core.hooksPath .githooks`.
+  - `use_home_wifi.sh` pipes the password to the Pi over SSH into a root-only file.
+- **The Orbi may change its 2.4 GHz channel by itself.** The transmitters only look at
+  power-up, so after a change they go silent: power-cycle them. Better, fix the 2.4 GHz
+  channel in the Orbi's settings (the laptop needs no change for this).
+- **A home network is busier,** so expect noisier CSI than on a dedicated network. Each
+  calibration is relative to *that* moment's traffic. The ESP-NOW broadcasts add a few
+  percent of airtime on the home channel.
+- **The dashboard has no login:** anyone on the home WiFi can open it.
+
+### Original design: the isolated network "linksys222"
+
+#### Addresses (linksys222)
 
 | Device | Address | How it gets it |
 |---|---|---|
@@ -1223,6 +1262,7 @@ reconstructions.
 ```
 RSSI-CSI-Demo-/
   README.md                  <- this file
+  .githooks/pre-commit       <- refuses commits containing a real WIFI_PASSWORD
   docs/images/               <- screenshots (from the simulator)
   csi-arduino.zip            <- the ESP code as uploaded (kept for reference)
   csi-arduino/               <- CURRENT CODE (extracted from the zip and extended)
@@ -1243,6 +1283,7 @@ RSSI-CSI-Demo-/
     deploy/
       fill_wifi_password.sh      laptop: password into the receiver configs
       prepare_sd_card.sh         laptop: Pi SD card -> user csi, SSH, WiFi (cloud-init)
+      use_home_wifi.sh           laptop: put the Pi on a home WiFi (ORBI21), password piped over SSH
       deploy_to_pi.sh            laptop: key, copy, run setup, ssh aliases
       setup_pi.sh                Pi: packages, WiFi, DHCP, services
       ap_tunnel.sh               laptop: reach the AP's admin page through the Pi

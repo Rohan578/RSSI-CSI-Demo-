@@ -13,6 +13,15 @@ ESP32-S3 receiver, all on 2.4 GHz, in a 20 × 20 ft basement.
  laptop --ethernet (10.42.0.x)--> Pi                 dashboard on port 5000
 ```
 
+> **Current network (2026-11-06): the home WiFi ORBI21.** linksys222 went down.
+> - The Pi is `csi-pi.local` (`ssh csi-pi`, dashboard `http://csi-pi.local:5000/room`), set up
+>   with `deploy/use_home_wifi.sh`.
+> - The S3 finds the Pi by that name; the transmitters follow ORBI21's channel.
+> - The Pi's DHCP server never runs on ORBI21.
+>
+> Details: the top-level README, "Network design". The linksys222 notes below still apply if
+> you switch back.
+
 ## Addresses
 
 | Device | linksys222 | Notes |

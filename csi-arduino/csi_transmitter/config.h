@@ -40,7 +40,7 @@
  *     Set to "" to always use WIFI_CHANNEL.
  *     (The transmitter never joins the network, so it needs no password.)
  * ------------------------------------------------------------------------- */
-#define AUTO_CHANNEL_SSID       "linksys222"
+#define AUTO_CHANNEL_SSID       "ORBI21"      /* must match WIFI_SSID in the receiver; linksys222 setup: "linksys222" */
 #define AUTO_CHANNEL_TIMEOUT_MS 30000
 
 /* ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@
  *                (52-144 are "DFS" channels: the access point may jump
  *                 away from them without warning - avoid for sensing)
  * ------------------------------------------------------------------------- */
-#define WIFI_CHANNEL            11      /* linksys222 2.4 GHz channel as of 2026-11-04 */
+#define WIFI_CHANNEL            1       /* ORBI21 2.4 GHz channel on 2026-11-06 (linksys222 was 11) */
 
 /* ---------------------------------------------------------------------------
  *  4. Packets per second

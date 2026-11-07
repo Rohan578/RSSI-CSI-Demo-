@@ -26,8 +26,11 @@ TARGET="$PI_USER@$PI_ETH"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -o IdentitiesOnly=yes -i "$KEY")
 
 echo "== Pi at $TARGET"
-if ! timeout 5 bash -c "</dev/tcp/$PI_ETH/22" 2>/dev/null; then
-  echo "SSH (port 22) is not open on $PI_ETH."
+# PI_ETH may also be a ~/.ssh/config shortcut (e.g. csi-pi): ask ssh where it points
+REAL_HOST="$(ssh -G "$PI_ETH" 2>/dev/null | awk '/^hostname /{print $2; exit}')"
+REAL_HOST="${REAL_HOST:-$PI_ETH}"
+if ! timeout 5 bash -c "</dev/tcp/$REAL_HOST/22" 2>/dev/null; then
+  echo "SSH (port 22) is not open on $PI_ETH ($REAL_HOST)."
   echo "On the Pi:  sudo systemctl enable --now ssh   (keyboard + screen), or put an empty"
   echo "file named 'ssh' on the SD card's boot partition and reboot it."
   exit 1

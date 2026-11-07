@@ -23,14 +23,14 @@
  *     If your access point uses a different name for its 5 GHz network
  *     (e.g. "MyWiFi-5G"), put that name here when USE_5GHZ is 1.
  * ------------------------------------------------------------------------- */
-#define WIFI_SSID               "linksys222"
-#define WIFI_PASSWORD           "__LINKSYS222_PSK__"
+#define WIFI_SSID               "ORBI21"
+#define WIFI_PASSWORD           "__WIFI_PASSWORD__"
 
 /* ---------------------------------------------------------------------------
  *  3. Raspberry Pi (where the CSI data goes)
  *     The Pi's IP address. Find it on the Pi with:  hostname -I
  * ------------------------------------------------------------------------- */
-#define PI_SERVER_IP            "192.168.1.50"
+#define PI_SERVER_IP            "172.16.0.75"   /* the Pi on ORBI21 (linksys222: "192.168.1.50") */
 #define PI_SERVER_PORT          5005        /* Must match UDP_PORT in server.py */
 
 /* ---------------------------------------------------------------------------
@@ -58,8 +58,8 @@
 #define CSI_FROM_TRANSMITTERS   1
 
 #define PING_RATE_HZ            50          /* Pings to the access point per second */
-#define PING_TARGET_IP          "192.168.1.50" /* linksys222 has no router: ping the Pi. "" = the gateway (normally the access
-                                               point/router). Or e.g. the Pi's IP. */
+#define PING_TARGET_IP          ""          /* "" = the gateway (ORBI21's router).
+                                               linksys222 has no router: use "192.168.1.50" (the Pi). */
 
 /* ---------------------------------------------------------------------------
  *  6. Transmitter MAC prefix (must match the transmitter sketch)

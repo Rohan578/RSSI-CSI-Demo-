@@ -162,24 +162,39 @@ dhcp-option=6
 dhcp-leasefile=/var/lib/misc/csi-dnsmasq.leases
 log-dhcp
 EOF
+  # SAFETY: this DHCP server may ONLY ever run while wlan0 is on the isolated
+  # linksys222 network. On any other WiFi (e.g. a home network that has its
+  # own router) a second DHCP server would break everyone's connection. So:
+  #  - the service is never enabled at boot by itself;
+  #  - a NetworkManager hook starts it when csi-linksys222 comes up and stops
+  #    it on any other connection / disconnect;
+  #  - ExecStartPre refuses to start unless wlan0 is on csi-linksys222.
   cat > /etc/systemd/system/csi-dhcp.service <<EOF
 [Unit]
-Description=DHCP for linksys222 (CSI sensing network, $WIFI_IF only)
-After=NetworkManager.service network-online.target
-Wants=network-online.target
+Description=DHCP for linksys222 ONLY (CSI sensing network, $WIFI_IF) - started by an NM hook
+After=NetworkManager.service
 
 [Service]
+ExecStartPre=/bin/sh -c 'nmcli -t -f GENERAL.CONNECTION device show $WIFI_IF | grep -qx "GENERAL.CONNECTION:$CON" || { echo "refusing: $WIFI_IF is not on $CON"; exit 1; }'
 ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/etc/csi/dnsmasq-linksys222.conf
 Restart=on-failure
 RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
 EOF
+  cat > /etc/NetworkManager/dispatcher.d/91-csi-dhcp <<EOF
+#!/bin/sh
+# Run csi-dhcp only while $WIFI_IF is connected via $CON (written by setup_pi.sh)
+[ "\$1" = "$WIFI_IF" ] || exit 0
+case "\$2" in
+  up)   if [ "\$CONNECTION_ID" = "$CON" ]; then systemctl start csi-dhcp; else systemctl stop csi-dhcp; fi ;;
+  down|pre-down) systemctl stop csi-dhcp ;;
+esac
+EOF
+  chmod 755 /etc/NetworkManager/dispatcher.d/91-csi-dhcp
   systemctl daemon-reload
-  systemctl enable --now csi-dhcp
+  systemctl disable csi-dhcp 2>/dev/null || true
+  systemctl restart csi-dhcp || true
   sleep 1
-  systemctl is-active --quiet csi-dhcp && echo "DHCP server running." || warn "DHCP server failed: journalctl -u csi-dhcp"
+  systemctl is-active --quiet csi-dhcp && echo "DHCP server running (only while on $SSID)." || warn "DHCP server failed: journalctl -u csi-dhcp"
 else
   systemctl disable --now csi-dhcp 2>/dev/null || true
 fi
