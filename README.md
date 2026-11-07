@@ -1276,11 +1276,11 @@ subcarriers, and no stable phase. **The approach that works** is the one impleme
 
 | Branch | What it is |
 |---|---|
-| **`home-wifi-dual-band`** (this one, default) | Home WiFi, laptop server, up to 10 transmitters, S3 on 2.4 GHz + C5 on 5 GHz, interference filtering |
-| **`flash-ready`** | The Raspberry Pi version: Pi 5 server, 5 transmitters, S3 receiver, ORBI21 or the isolated linksys222 network. Tested on hardware |
-| `legacy/main` | The first uploads |
-| `legacy/espnow-csi-link` | Early ESP-NOW CSI link (C6 → S3) and PC receiver |
-| `legacy/pi-3d-dashboard`, `legacy/csi-pi-dashboard` | Earlier Pi + 3D view work, superseded by `flash-ready` |
+| **`home-wifi-dual-band`** (this one) | Home WiFi, laptop server, up to 10 transmitters, S3 on 2.4 GHz + C5 on 5 GHz, interference filtering |
+| **`flash-ready`** | The Raspberry Pi version: Pi 5 server, 5 transmitters, S3 receiver, ORBI21 or the isolated linksys222 network |
+
+Older experiments (the first uploads and the first ESP-NOW CSI link with a PC receiver) are
+kept for reference in the `legacy/` folder of the `flash-ready` branch.
 
 ---
 
