@@ -111,10 +111,10 @@ The simulated room starts empty for 25 s, which is used as the calibration. Then
 
 | Change | Effect on the simulator (see [Accuracy](#accuracy)) |
 |---|---|
-| **Common-mode removal** per receiver and band | Removes interference "ghosts": empty-room false alarms fell from ~20–60% to ~0–6% |
+| **Common-mode removal** per receiver and band | Removes interference "ghosts": empty-room false alarms fell from 20–60% to 0–8% |
 | **Interference gate** (no new person while all 2.4 GHz paths are disturbed together, unless 5 GHz agrees) | Removes the remaining false alarms → 0% in every benchmark run |
 | **Hampel filter** on each 1 s window (outlier packets replaced by the median) | Cleaner AI features: held-out exact square 72% → 80% |
-| Up to **10 transmitters** (room.json) | More paths: typical position error 1.6 m → ~1.0 m |
+| Up to **10 transmitters** (room.json) | More paths: typical position error 1.35 m → 0.9 m; right square 30% → 44% |
 | 5 GHz router link used by the **AI model** and the interference gate | The model sees both bands |
 | Fade weights fitted **per band**; the router link can count for geometry when the router is inside the room (`in_room: true`) | Correctness |
 
@@ -131,7 +131,7 @@ Things that were tried and **not** kept, because they didn't help on the benchma
 | up to 10 | ESP32 DevKit / ESP32-C3 / **ESP32-C6 SuperMini** / ESP32-C5 | **Transmitters**, `NODE_ID` 1–10 | `firmware/csi_transmitter` | ESP32 Dev Module / ESP32C3 / ESP32C6 / ESP32C5 Dev Module |
 | 1 | **ESP32-S3**, e.g. Seeed XIAO ESP32S3 with its antenna (a dipole is better) | **2.4 GHz receiver**, `RECEIVER_ID 1` | `firmware/csi_receiver_24` | XIAO_ESP32S3 (or ESP32S3 Dev Module) |
 | 1 | **ESP32-C5 DevKit, 4 MB flash** | **5 GHz receiver**, `RECEIVER_ID 2` | `firmware/csi_receiver_5g` | ESP32C5 Dev Module, Flash 4MB |
-| (optional) | another ESP32-C6 (or S3) | **2nd 2.4 GHz receiver**, `RECEIVER_ID 3`: the biggest accuracy upgrade (crossing paths) | `firmware/csi_receiver_24` | ESP32C6 Dev Module |
+| (optional) | another ESP32-C6 (or S3) | **2nd 2.4 GHz receiver**, `RECEIVER_ID 3`: crossing paths. An experiment: it didn't improve the simulator benchmark, see [Accuracy](#accuracy) | `firmware/csi_receiver_24` | ESP32C6 Dev Module |
 | 1 | Laptop / PC on the home WiFi | Runs `server/server.py` | – | Python 3.9+ |
 | – | Your home router | Provides the WiFi, and is the 5 GHz "transmitter" for the C5 | – | – |
 
@@ -268,7 +268,7 @@ The default `room.json` is a 20 × 20 ft room (6.10 m):
 - **The C5 measures the router → C5 path.** Put it where that path crosses the room if you can, for example on the wall *opposite* the router's direction.
   - If the router is inside the room, set `"in_room": true` in `room.json` and measure its position. Its path then also helps place people.
   - If the router is in another room, its path still helps the AI model and the interference check.
-- **A 2nd 2.4 GHz receiver on the opposite wall** (`receivers.3`, north wall middle) gives crossing paths. With one receiver every path ends at the same board, so "how far along the path" is the weakest part.
+- **A 2nd 2.4 GHz receiver on the opposite wall** (`receivers.3`, north wall middle) gives crossing paths. With one receiver every path ends at the same board, so "how far along the path" is the weakest part. On the simulator it didn't improve the scores, though (see [Accuracy](#accuracy)), so add it only as an experiment.
 - **Never move or rotate a board after calibrating or recording training data.** Antennas vertical, cables taped.
 
 ---
@@ -312,7 +312,17 @@ The simulator has ESP32 quirks, and optional home-WiFi interference: bursts that
 
 Geometry mode (no AI model), averaged over 2 seeds. **"Interference" = home-WiFi bursts on 2.4 GHz.**
 
-*(Results table being generated: re-run `python server/benchmark.py --all --baseline <flash-ready pi_server>`.)*
+| Setup | Interference | err (m) | err standing (m) | right square | 1 person counted right | 2 people | false alarm (empty room) |
+|---|---|---|---|---|---|---|---|
+| **flash-ready code**, 5 TX + S3 | yes | 1.57 | 1.30 | 26% | 82% | 6% | **26%** |
+| this branch, 5 TX + S3 | yes | 1.35 | 1.13 | 30% | 80% | 0% | **0%** |
+| this branch, 10 TX + S3 | yes | 0.91 | 0.67 | 44% | 87% | 17% | 2% |
+| **this branch, 10 TX + S3 + C5 (the planned setup)** | yes | **0.89** | **0.71** | **45%** | 85% | 14% | **0%** |
+| this branch, 10 TX + S3 + 2nd 2.4 GHz receiver + C5 | yes | 0.94 | 0.91 | 44% | 96% | 5% | 3% |
+| flash-ready code, 5 TX + S3 | no (quiet air) | 1.27 | 1.00 | 35% | 83% | 8% | 0% |
+| this branch, 10 TX + S3 + C5 | no (quiet air) | 0.92 | 0.63 | 45% | 89% | 12% | 0% |
+
+**In short:** under home-WiFi interference, the old code showed someone in the empty room about a quarter of the time. This branch shows nobody. With 10 transmitters, the typical error drops from about 1.6 m to about 0.9 m, and the right square goes from about 1 in 4 to almost 1 in 2. In quiet air, the new code is no worse than the old.
 
 *err* = median distance between a shown person and the true position (metres; guessing the room's centre ≈ 2.3 m). *right square* = exact 3 × 3 zone. *2 people* = shown as exactly 2. *false alarm* = anyone shown while the room is empty.
 
@@ -328,7 +338,8 @@ Geometry mode (no AI model), averaged over 2 seeds. **"Interference" = home-WiFi
 
 **Read this honestly:**
 - The simulator is a simplified room with simplified bodies. These numbers compare **versions and layouts fairly**; they don't predict your basement.
-- Two people are still often shown as one: that's the limit of one 2.4 GHz receiver. A 2nd receiver raised "2 people counted right" the most.
+- **Two people are still usually shown as one** in geometry mode. The AI model (trained with 2-person sessions) is the way to count them.
+- **A 2nd 2.4 GHz receiver did not improve this benchmark.** It raised "1 person counted right" to 96%, but not the position error, and it counted two people worse. With the older code it had helped a lot (more paths to catch ghosts with). The interference removal now does that job. It may still help in a real room or with the AI model, but that's unproven, so treat it as an experiment, not an upgrade.
 
 To measure your real room, record the sessions in [`docs/VOLUNTEERS.md`](docs/VOLUNTEERS.md), then run `python train_model.py --test-session <held-out session>`.
 
