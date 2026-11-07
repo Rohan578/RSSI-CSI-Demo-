@@ -8,23 +8,41 @@
 #pragma once
 
 /* ---------------------------------------------------------------------------
- *  1. WiFi access point
- *     Must be 2.4 GHz, WPA2, on a FIXED channel (not "auto").
- *     When the S3 connects it prints the channel - set WIFI_CHANNEL on
- *     every transmitter to that number.
+ *  1. WiFi network
+ *     2.4 GHz, WPA2. The transmitters copy this network's channel at
+ *     power-up (their AUTO_CHANNEL_SSID must be the same name).
+ *     WIFI_PASSWORD stays a placeholder in git: run
+ *     deploy/fill_wifi_password.sh on the laptop just before uploading.
+ *
+ *     Current setup: the home network ORBI21 (it has a router + DHCP).
+ *     For the isolated linksys222 network instead, see the values in the
+ *     comments of sections 2 and 2b.
  * ------------------------------------------------------------------------- */
 #define WIFI_SSID               "ORBI21"
-#define WIFI_PASSWORD           "yellowsun456"
+#define WIFI_PASSWORD           "__WIFI_PASSWORD__"
 
 /* ---------------------------------------------------------------------------
  *  2. Raspberry Pi (where the CSI data goes)
- *     The Pi's IP address on the access point's network. Find it on the
- *     Pi with:  hostname -I
- *     Tip: in the access point's settings, give the Pi a "DHCP reservation"
- *     (a fixed IP) so this never changes.
+ *     PI_SERVER_HOST: the Pi's name, looked up with mDNS (".local") at
+ *       start-up and after every WiFi reconnect - so it keeps working when
+ *       the router gives the Pi a different address. "" = don't look up.
+ *     PI_SERVER_IP: used if the name can't be found.
+ *       ORBI21: the Pi's current address (172.16.0.75 on 2026-11-06).
+ *       linksys222: "192.168.1.50" (fixed by deploy/setup_pi.sh).
  * ------------------------------------------------------------------------- */
-#define PI_SERVER_IP            "192.168.1.50"
+#define PI_SERVER_HOST          "csi-pi"
+#define PI_SERVER_IP            "172.16.0.75"
 #define PI_SERVER_PORT          5005        /* Must match UDP_PORT in server.py */
+
+/* ---------------------------------------------------------------------------
+ *  2b. This receiver's own IP address
+ *     "" = get one from the network's DHCP server (ORBI21's router).
+ *     linksys222 has no router: use a fixed address there instead -
+ *       STATIC_IP "192.168.1.60", STATIC_GATEWAY "192.168.1.50".
+ * ------------------------------------------------------------------------- */
+#define STATIC_IP               ""
+#define STATIC_GATEWAY          "192.168.1.50"   /* only used with STATIC_IP */
+#define STATIC_SUBNET           "255.255.255.0"
 
 /* ---------------------------------------------------------------------------
  *  3. Receiver ID  (1 to 255)

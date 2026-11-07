@@ -35,7 +35,7 @@
 // Edit these values for your deployment, or provision at runtime over Serial.
 
 #define WIFI_SSID          "Cambukingham"
-#define WIFI_PASSWORD      "gavril2006"                    // empty = open network
+#define WIFI_PASSWORD      "__WIFI_PASSWORD__"                    // empty = open network
 #define AGGREGATOR_IP      "172.21.240.1"       // host running sensing-server
 #define AGGREGATOR_PORT    5005                  // UDP port
 #define CSI_NODE_ID        1                     // unique per node (0-255)
