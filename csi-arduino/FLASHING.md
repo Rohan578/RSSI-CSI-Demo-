@@ -56,7 +56,17 @@ Leave the rest of `config.h` as it is. These values already match the Pi:
 | `PI_SERVER_HOST` | `"csi-pi"` | The S3 finds the Pi as `csi-pi.local`, even if its address changes |
 | `PI_SERVER_IP` | `"172.16.0.75"` | Used only if `csi-pi.local` doesn't answer |
 | `PI_SERVER_PORT` | `5005` | The Pi listens on **UDP 5005** |
-| `STATIC_IP` | `""` | Get an address from the ORBI21 router |
+| `STATIC_IP` | `"172.16.0.240"` | A **fixed** address on the Orbi's network (see below) |
+| `STATIC_GATEWAY` | `"172.16.0.1"` | The Orbi router |
+| `WIFI_BSSID` | `""` | Any ORBI21 access point. Pinning one is only needed in special cases |
+
+**Why a fixed address:** ORBI21 has **two DHCP servers**:
+- the Orbi (172.16.0.x);
+- another device handing out 172.27.35.x behind its own NAT. Through it, about 90% of
+  the packets never reach the Pi.
+
+With DHCP, the S3 sometimes gets the bad one. 172.16.0.240 was free on 2026-11-06; reserve
+it for the S3 in the Orbi app if you can.
 
 **Don't commit `config.h` with the password in it.** Step 6 puts the placeholder back.
 
@@ -67,11 +77,15 @@ Leave the rest of `config.h` as it is. These values already match the Pi:
    `espnow_packet.h` open with it.
 2. Set **Tools**:
 
-   | Setting | Value |
-   |---|---|
-   | Board | **ESP32S3 Dev Module** (or your exact S3 board) |
-   | USB CDC On Boot | **Enabled** if plugged into the S3's native **USB** port, **Disabled** if plugged into the **UART/COM** port |
-   | Port | the S3's port |
+   | Your S3 board | Tools → Board | Other Tools settings |
+   |---|---|---|
+   | **Seeed Studio XIAO ESP32S3** (this setup) | **XIAO_ESP32S3** | Leave the defaults. Then the status LED (GPIO 21) works |
+   | Espressif ESP32-S3 DevKitC | ESP32S3 Dev Module | USB CDC On Boot: **Enabled** on the native **USB** port, **Disabled** on the **UART/COM** port |
+
+   Then pick the S3's **Port** (on Linux usually `/dev/ttyACM0`).
+
+   **XIAO: screw or click the antenna onto its tiny U.FL connector first.** The XIAO has no
+   built-in antenna, and without one its WiFi barely works.
 
 3. Click **Upload**. If it hangs at "Connecting...", hold the **BOOT** button until the upload
    starts.
@@ -82,9 +96,11 @@ Leave the rest of `config.h` as it is. These values already match the Pi:
    ==================================================
      CSI receiver 1  |  sending to csi-pi.local (else 172.16.0.75):5005
    ==================================================
-   [WIFI] Connecting to "ORBI21"......
-   [WIFI] Connected. S3 IP: 172.16.0.xx
-   [WIFI] Signal from access point: -55 dBm
+   [WIFI] Using fixed IP 172.16.0.240
+   [WIFI] Connecting to "ORBI21"....
+   [WIFI] Connected. S3 IP: 172.16.0.240
+   [WIFI] Access point: 0E:02:8E:9C:00:06 (put this in WIFI_BSSID to always use it)
+   [WIFI] Signal from access point: -47 dBm
    --------------------------------------------------
      ACCESS POINT CHANNEL: 1
      ...
@@ -108,6 +124,8 @@ Leave the rest of `config.h` as it is. These values already match the Pi:
 | `Connecting to "linksys222"....` (forever) | You flashed old settings. Get the code from `main` again (step 1) |
 | `Still not connected to "ORBI21"` | Wrong password, or the S3 is too far from an ORBI21 access point. Move it closer to test |
 | `[PI] csi-pi.local didn't answer - sending to 172.16.0.75` | The Pi is off, or not on ORBI21. Check http://csi-pi.local:5000. It still works if the Pi really is at 172.16.0.75 |
+| `S3 IP: 172.27.35.x` | It took an address from the second DHCP server, and packets will be lost. Keep `STATIC_IP "172.16.0.240"` (step 2 table) |
+| The stats show `queue full` climbing | Old firmware: flash the current code. It no longer stalls when no Serial Monitor is open |
 | Nothing at all | Wrong **USB CDC On Boot** setting (see the table above), or the wrong baud rate |
 
 ## 4. Flash ONE transmitter first (node 1)

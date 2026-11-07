@@ -178,7 +178,7 @@ project uses **amplitude and RSSI only**, with AGC removed by normalisation.
 | Qty | Part | Role | Notes |
 |---|---|---|---|
 | 5 | ESP32 dev boards (WROOM-32) | **Transmitters**, `NODE_ID` 1–5 | Any of ESP32 / C3 / C6 / C5 run the same sketch |
-| 1 | ESP32-S3 with an external dipole antenna | **Receiver** (`RECEIVER_ID 1`) | Mount the antenna vertically. Some S3 boards need a resistor or jumper moved to use the external connector |
+| 1 | ESP32-S3: **Seeed Studio XIAO ESP32S3** with its U.FL antenna | **Receiver** (`RECEIVER_ID 1`) | **Attach the antenna.** The XIAO has none built in. Mount it vertically. Arduino board: `XIAO_ESP32S3` |
 | 1 | Raspberry Pi 5 | Collector, analysis, web server | Raspberry Pi OS (Bookworm or newer, with NetworkManager) |
 | 1 | Aruba access point (Instant) | WiFi network "linksys222" | Powered by PoE, no uplink |
 | – | Stands or shelves at about 1 m | Hold every board at the same height | Never move a board after recording training data |
@@ -270,10 +270,26 @@ the linksys222 values noted in each `config.h`.
 
 | Device | On ORBI21 | How |
 |---|---|---|
-| Raspberry Pi 5 | DHCP from the Orbi router (172.16.0.75 on 2026-11-06). **Name: `csi-pi.local`** | `deploy/use_home_wifi.sh` (NetworkManager profile `csi-orbi21`) |
-| ESP32-S3 receiver | DHCP (`STATIC_IP ""`) | Finds the Pi **by name** (`PI_SERVER_HOST "csi-pi"`, mDNS) at start-up and after every reconnect. `PI_SERVER_IP` is only the fallback |
+| Raspberry Pi 5 | DHCP from the Orbi router (172.16.0.75 on 2026-11-06), rejecting the second DHCP server. **Name: `csi-pi.local`** | `REJECT_DHCP=172.27.35.1 deploy/use_home_wifi.sh` (NetworkManager profile `csi-orbi21`) |
+| ESP32-S3 receiver (Seeed XIAO ESP32S3) | **fixed 172.16.0.240**, gateway 172.16.0.1 | Finds the Pi **by name** (`PI_SERVER_HOST "csi-pi"`, mDNS) at start-up and after every reconnect. `PI_SERVER_IP` is only the fallback |
 | Transmitters | not on the network | `AUTO_CHANNEL_SSID "ORBI21"`: they copy ORBI21's 2.4 GHz channel at power-up (channel 1 on 2026-11-06) |
 | Laptop | its normal ORBI21 connection | `ssh csi-pi` and `http://csi-pi.local:5000/room` over WiFi; no cable needed |
+
+**ORBI21 has two DHCP servers** (measured 2026-11-06 with a DHCP discover probe):
+
+- the Orbi router, `172.16.0.1`, offering 172.16.0.x;
+- a second device, `172.16.0.37`, MAC `d0:c5:d3:60:1e:23`, offering 172.27.35.x behind
+  its own NAT.
+
+Anything that takes the second offer is routed through that device. For the S3 that meant
+about 90% of packets lost before they reached the Pi. So:
+
+- the **Pi rejects offers from 172.27.35.1** (NetworkManager `ipv4.dhcp-reject-servers`);
+- the **S3 uses a fixed address** on 172.16.0.x.
+
+The real fix is to find that device in the Orbi app (by its MAC) and stop it handing out
+addresses. A second router plugged in LAN-to-LAN, or a PC sharing its connection, are
+typical causes.
 
 **Rules on a home network:**
 
@@ -395,9 +411,14 @@ Only flash these folders. The old sketches are kept in `legacy/` and don't work 
 - **The S3 finds the Pi by name.** `PI_SERVER_HOST "csi-pi"` is looked up via mDNS
   (`csi-pi.local`), at start-up and after every WiFi reconnect. So it keeps working when the
   router gives the Pi a new address. `PI_SERVER_IP` is only the fallback.
-- **The S3 gets its address from DHCP** (`STATIC_IP ""`). A fixed IP (`STATIC_IP`,
-  `STATIC_GATEWAY`, `STATIC_SUBNET`) is still supported, for networks without a router such
-  as linksys222. In that case `WiFi.config()` is called before `WiFi.begin()`.
+- **The S3 uses a fixed IP on the Orbi's network** (`STATIC_IP "172.16.0.240"`, gateway
+  `172.16.0.1`), set with `WiFi.config()` before `WiFi.begin()`. ORBI21 has a second DHCP
+  server that hands out 172.27.35.x behind a lossy NAT. `STATIC_IP ""` = DHCP, for networks
+  with a single DHCP server.
+- **Optional access-point pinning** (`WIFI_BSSID`). It falls back to any access point after
+  20 s. The S3 prints which access point it joined.
+- **USB serial never stalls the S3.** Without a computer reading the Serial Monitor, prints
+  used to block `loop()` and overflow the CSI queue. Now `Serial.setTxTimeoutMs(0)`.
 - **The S3 refuses to start with the placeholder password.** It prints `WIFI_PASSWORD in
   config.h is still the placeholder` and stops, instead of failing to connect forever.
 - **Transmitters find the channel by themselves.** At power-up, `findAccessPointChannel()`:
@@ -419,7 +440,8 @@ Only flash these folders. The old sketches are kept in `legacy/` and don't work 
 | `WIFI_SSID` / `WIFI_PASSWORD` | `"ORBI21"` / `"__WIFI_PASSWORD__"` | Fill in the password locally before flashing (`FLASHING.md` step 2). Never commit it |
 | `PI_SERVER_HOST` | `"csi-pi"` | The Pi's mDNS name (`""` = don't look it up) |
 | `PI_SERVER_IP` / `PI_SERVER_PORT` | `"172.16.0.75"` / `5005` | Fallback address / the Pi's **UDP** port |
-| `STATIC_IP` | `""` | `""` = DHCP. linksys222: `"192.168.1.60"` |
+| `STATIC_IP` / `STATIC_GATEWAY` | `"172.16.0.240"` / `"172.16.0.1"` | Fixed address on the Orbi's network, because ORBI21 has a second DHCP server (see Network design). `""` = DHCP. linksys222: `"192.168.1.60"` / `"192.168.1.50"` |
+| `WIFI_BSSID` | `""` | Join one specific access point (its BSSID), or `""` = any. The S3 prints the one it joined |
 | `RECEIVER_ID` | `1` | Must match `room.json` → `receivers` |
 | `NODE_MAC_PREFIX` | `1a:00:00:00:00` | Which senders count as transmitters |
 | `MAX_UDP_PAYLOAD`, `BATCH_FLUSH_MS`, `CSI_QUEUE_LENGTH` | 1400, 50, 64 | Batching |
@@ -1200,6 +1222,8 @@ Unknown until you measure it. Record the sessions in
 | CSV timestamps wrong after a reboot | No internet on linksys222 means no clock sync. Plug the cable in briefly, or fit the Pi 5's RTC battery |
 | Disk full message | Delete old `data/csi_*.csv` files |
 | `setup_pi.sh`: "Another DHCP server answered" | Something else serves linksys222. Use its subnet, or switch it off |
+| S3 gets `172.27.35.x`, and the Pi receives only ~10% of the packets | ORBI21's second DHCP server: use the fixed `STATIC_IP "172.16.0.240"` (see Network design) |
+| S3 stats show `queue full` climbing | Old firmware that stalled when no Serial Monitor was open: flash the current code |
 | Pi on the cable answers only 1 ping in 3, SSH times out | Energy-Efficient Ethernet between the Pi 5 and the laptop port. `setup_pi.sh` turns it off; by hand: `sudo ethtool --set-eee eth0 eee off` on the Pi |
 | `setup_pi.sh`: "Could not join linksys222" | The AP is off, still booting (Aruba: 3–5 min), or out of range: `nmcli device wifi list` on the Pi should list linksys222. Re-run `setup_pi.sh` once it's on the air, to finish the DHCP step |
 | SSH: "Server accepts key" then "Permission denied" | Your key has a passphrase and no agent holds it. Unlock it with `ssh-add`, or use a key without a passphrase (`KEY=... deploy_to_pi.sh`) |

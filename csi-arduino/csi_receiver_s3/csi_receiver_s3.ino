@@ -151,13 +151,26 @@ void connectWiFi() {
     }
   }
 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  // Optional: always join one specific access point (config.h section 1b)
+  uint8_t bssid[6];
+  bool pinned = strlen(WIFI_BSSID) > 0 &&
+                sscanf(WIFI_BSSID, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+                       &bssid[0], &bssid[1], &bssid[2], &bssid[3], &bssid[4], &bssid[5]) == 6;
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD, 0, pinned ? bssid : nullptr);
 
-  Serial.printf("[WIFI] Connecting to \"%s\"", WIFI_SSID);
+  Serial.printf("[WIFI] Connecting to \"%s\"%s%s", WIFI_SSID,
+                pinned ? " via access point " : "", pinned ? WIFI_BSSID : "");
   uint32_t start = millis();
   while (WiFi.status() != WL_CONNECTED) {
     delay(250);
     Serial.print(".");
+    if (pinned && millis() - start > 20000) {
+      Serial.printf("\n[WIFI] Access point %s not reachable - joining any \"%s\"", WIFI_BSSID, WIFI_SSID);
+      pinned = false;
+      WiFi.disconnect();
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+      start = millis();
+    }
     if (millis() - start > 20000) {
       Serial.printf("\n[WIFI] Still not connected to \"%s\". Check WIFI_SSID / WIFI_PASSWORD\n", WIFI_SSID);
       Serial.println("[WIFI] in config.h, and that the network has a 2.4 GHz band in range.");
@@ -171,6 +184,8 @@ void connectWiFi() {
 
   Serial.println();
   Serial.printf("[WIFI] Connected. S3 IP: %s\n", WiFi.localIP().toString().c_str());
+  Serial.printf("[WIFI] Access point: %s (put this in WIFI_BSSID to always use it)\n",
+                WiFi.BSSIDstr().c_str());
   Serial.printf("[WIFI] Signal from access point: %d dBm\n", WiFi.RSSI());
   Serial.println("--------------------------------------------------");
   Serial.printf ("  ACCESS POINT CHANNEL: %d\n", (int)WiFi.channel());
@@ -416,9 +431,7 @@ void findPi(int attempts) {
   for (int i = 0; i < attempts; i++) {
     IPAddress ip = MDNS.queryHost(PI_SERVER_HOST, 1500);
     if (ip != IPAddress()) {
-      if (ip != piAddress) {
-        Serial.printf("[PI] Found %s.local at %s\n", PI_SERVER_HOST, ip.toString().c_str());
-      }
+      Serial.printf("[PI] Found %s.local at %s\n", PI_SERVER_HOST, ip.toString().c_str());
       piAddress = ip;
       return;
     }
@@ -469,6 +482,12 @@ void printStats() {
  * ========================================================================== */
 void setup() {
   Serial.begin(SERIAL_BAUD);
+#if ARDUINO_USB_CDC_ON_BOOT && ARDUINO_USB_MODE
+  // USB serial: never wait for a computer to read the output. Without this,
+  // printing stalls loop() when nobody has the Serial Monitor open, the CSI
+  // queue overflows and samples are lost ("queue full" in the stats).
+  Serial.setTxTimeoutMs(0);
+#endif
   delay(1500);   // Give the USB serial port a moment to come up
 
   Serial.println("==================================================");

@@ -14,11 +14,14 @@
 #  - The Pi's own DHCP server is NEVER started here (setup_pi.sh only allows
 #    it on linksys222).
 #  Pi address: PI=csi-pi-eth (cable, default) or PI=csi-pi (WiFi) - see ~/.ssh/config.
+#  REJECT_DHCP="172.27.35.1": ignore a second (bad) DHCP server on that network
+#  (ORBI21 has one - see the README, "Network design").
 # ============================================================================
 set -euo pipefail
 SSID="${1:-ORBI21}"
 PI="${PI:-csi-pi-eth}"
 CON="csi-$(printf '%s' "$SSID" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-')"
+REJECT_DHCP="${REJECT_DHCP:-}"
 
 PSK=""
 if command -v nmcli >/dev/null; then
@@ -48,10 +51,11 @@ unset PSK
 sudo nmcli connection modify csi-linksys222 connection.autoconnect no 2>/dev/null || true
 sudo systemctl stop csi-dhcp 2>/dev/null || true
 sudo nmcli connection reload
+[ -n "$REJECT_DHCP" ] && sudo nmcli connection modify "$CON" ipv4.dhcp-reject-servers "$REJECT_DHCP"
 sudo nmcli --wait 45 connection up "$CON" | tail -1
 echo "Pi on $SSID: $(ip -br -4 addr show wlan0 | awk '{print $3}')  (name: $(hostname).local)"
 PI_SIDE
 
 { printf '%s\n' "$PSK"; } | ssh -o BatchMode=yes "$PI" \
-  "export SSID=$(printf '%q' "$SSID") CON=$(printf '%q' "$CON"); bash -c $(printf '%q' "$REMOTE_SCRIPT")"
+  "export SSID=$(printf '%q' "$SSID") CON=$(printf '%q' "$CON") REJECT_DHCP=$(printf '%q' "$REJECT_DHCP"); bash -c $(printf '%q' "$REMOTE_SCRIPT")"
 PSK=""
