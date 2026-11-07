@@ -1,0 +1,55 @@
+{
+ "_help": [
+  "Benchmark: flash-ready layout, 5 transmitters + 1 S3 receiver."
+ ],
+ "name": "Basement",
+ "width": 6.1,
+ "depth": 6.1,
+ "height": 2.3,
+ "zones": {
+  "cols": 3,
+  "rows": 3
+ },
+ "receivers": {
+  "1": {
+   "x": 3.05,
+   "y": 0.25,
+   "z": 1.0,
+   "label": "S3 receiver",
+   "band": "2.4"
+  }
+ },
+ "transmitters": {
+  "1": {
+   "x": 0.25,
+   "y": 2.2,
+   "z": 1.0,
+   "label": "TX 1"
+  },
+  "2": {
+   "x": 0.25,
+   "y": 5.85,
+   "z": 1.0,
+   "label": "TX 2"
+  },
+  "3": {
+   "x": 3.05,
+   "y": 5.85,
+   "z": 1.0,
+   "label": "TX 3"
+  },
+  "4": {
+   "x": 5.85,
+   "y": 5.85,
+   "z": 1.0,
+   "label": "TX 4"
+  },
+  "5": {
+   "x": 5.85,
+   "y": 2.2,
+   "z": 1.0,
+   "label": "TX 5"
+  }
+ },
+ "furniture": []
+}

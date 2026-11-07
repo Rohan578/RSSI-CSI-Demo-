@@ -4,6 +4,6 @@
 # Enable once per clone:   git config core.hooksPath .githooks
 if git diff --cached -U0 -- '*config.h' | grep -E '^\+#define WIFI_PASSWORD' | grep -vq '__WIFI_PASSWORD__'; then
   echo "pre-commit: a config.h with a real WIFI_PASSWORD is staged." >&2
-  echo "            Run ./csi-arduino/deploy/fill_wifi_password.sh --clear, then commit again." >&2
+  echo "            Run ./deploy/fill_wifi_password.sh --clear, then commit again." >&2
   exit 1
 fi

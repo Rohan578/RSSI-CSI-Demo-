@@ -4,8 +4,8 @@ This guide is for the current setup: **1 × ESP32-S3 receiver + 5 × ESP32 trans
 the home WiFi **ORBI21**, sending to the Raspberry Pi at **`csi-pi.local`**. Follow it top to
 bottom on any computer with the Arduino IDE. It takes about 20 minutes.
 
-> **Only flash the sketches inside `csi-arduino/`:** `csi_receiver_s3/` and
-> `csi_transmitter/`. The old files in `legacy/` don't work with the Pi.
+> **Only flash the sketches inside `firmware/pi/`:** `csi_receiver_s3/` and
+> `csi_transmitter/`. (`firmware/home-wifi/` is the other version, for `laptop_server/`.) The old files in `legacy/` don't work with the Pi.
 
 ---
 
@@ -22,17 +22,17 @@ bottom on any computer with the Arduino IDE. It takes about 20 minutes.
 - **The ORBI21 WiFi password.** Only the S3 needs it.
 - The Pi powered on. Check: http://csi-pi.local:5000 opens in a browser on ORBI21.
 
-## 1. Get the code from the `flash-ready` branch
+## 1. Get the code from the `pi-csi-dashboard` branch
 
 Pick one:
 
 ```bash
-git clone -b flash-ready https://github.com/Rohan578/RSSI-CSI-Demo-.git   # first time
+git clone -b pi-csi-dashboard https://github.com/Rohan578/RSSI-CSI-Demo-.git   # first time
 cd RSSI-CSI-Demo-
-git checkout flash-ready && git pull                                    # every time after that
+git checkout pi-csi-dashboard && git pull                                    # every time after that
 ```
 
-Or on GitHub: switch the branch menu to **flash-ready**, then **Code → Download ZIP**, and unzip it.
+Or on GitHub: switch the branch menu to **pi-csi-dashboard**, then **Code → Download ZIP**, and unzip it.
 
 ## 2. Put the WiFi password into the S3 sketch (S3 only)
 
@@ -40,9 +40,9 @@ The password is **never stored in git**. `config.h` holds the placeholder
 `__WIFI_PASSWORD__`. Fill it in locally just before uploading:
 
 - **On the Linux laptop that has ORBI21 saved,** run
-  `./csi-arduino/deploy/fill_wifi_password.sh`. It copies the saved ORBI21 password into
+  `./deploy/fill_wifi_password.sh`. It copies the saved ORBI21 password into
   `config.h` and never prints it.
-- **On any other computer,** open `csi-arduino/csi_receiver_s3/config.h`, find the line
+- **On any other computer,** open `firmware/pi/csi_receiver_s3/config.h`, find the line
   ```c
   #define WIFI_PASSWORD           "__WIFI_PASSWORD__"
   ```
@@ -73,7 +73,7 @@ it for the S3 in the Orbi app if you can.
 ## 3. Flash the ESP32-S3 receiver
 
 1. In the Arduino IDE, choose **File → Open** →
-   `csi-arduino/csi_receiver_s3/csi_receiver_s3.ino`. The tabs `config.h`, `csi_packet.h` and
+   `firmware/pi/csi_receiver_s3/csi_receiver_s3.ino`. The tabs `config.h`, `csi_packet.h` and
    `espnow_packet.h` open with it.
 2. Set **Tools**:
 
@@ -121,7 +121,7 @@ it for the S3 in the Orbi app if you can.
 | Serial Monitor shows | Meaning and fix |
 |---|---|
 | `[ERROR] WIFI_PASSWORD in config.h is still the placeholder.` | Step 2 was skipped. Fill in the password, then upload again |
-| `Connecting to "linksys222"....` (forever) | You flashed old settings. Get the code from `flash-ready` again (step 1) |
+| `Connecting to "linksys222"....` (forever) | You flashed old settings. Get the code from `pi-csi-dashboard` again (step 1) |
 | `Still not connected to "ORBI21"` | Wrong password, or the S3 is too far from an ORBI21 access point. Move it closer to test |
 | `[PI] csi-pi.local didn't answer - sending to 172.16.0.75` | The Pi is off, or not on ORBI21. Check http://csi-pi.local:5000. It still works if the Pi really is at 172.16.0.75 |
 | `S3 IP: 172.27.35.x` | It took an address from the second DHCP server, and packets will be lost. Keep `STATIC_IP "172.16.0.240"` (step 2 table) |
@@ -130,7 +130,7 @@ it for the S3 in the Orbi app if you can.
 
 ## 4. Flash ONE transmitter first (node 1)
 
-1. **File → Open** → `csi-arduino/csi_transmitter/csi_transmitter.ino`.
+1. **File → Open** → `firmware/pi/csi_transmitter/csi_transmitter.ino`.
 2. In the `config.h` tab, set **`#define NODE_ID 1`**. The transmitters need **no
    password**: they never join the WiFi, they only copy ORBI21's channel.
 3. Set **Tools**:
@@ -183,7 +183,7 @@ Each new node should appear in the S3's Serial Monitor and on the Pi within a fe
 
 ## 6. Put the placeholder back
 
-- **Linux laptop:** `./csi-arduino/deploy/fill_wifi_password.sh --clear`
+- **Linux laptop:** `./deploy/fill_wifi_password.sh --clear`
 - **Anywhere else:** in `csi_receiver_s3/config.h`, put `__WIFI_PASSWORD__` back in place
   of the password.
 
@@ -199,7 +199,7 @@ After that, git **refuses** any commit that contains a real `WIFI_PASSWORD`.
 
 - **Place the boards** (`VOLUNTEERS.md` → "Setting up the room"). Put them all at the
   same height, about 1 m, and **never move them** once you start recording.
-- **Measure where they ended up** and put the positions into `csi-arduino/pi_server/room.json`
+- **Measure where they ended up** and put the positions into `pi_server/room.json`
   on the Pi. Then run `ssh csi-pi 'sudo systemctl restart csi-server'`.
 - **Calibrate:** open http://csi-pi.local:5000/room, have everyone leave the room, and
   press **Calibrate empty room**.

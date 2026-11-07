@@ -1,0 +1,39 @@
+{
+  "_help": [
+    "Room layout used by the 3D view, the localizer, the simulator, the benchmark and train_model.py.",
+    "Units are METERS. Origin (0,0) = the room's south-west floor corner, x = east, y = north, z = up.",
+    "Pick any wall as 'south' - just be consistent. 20 ft = 6.10 m.",
+    "Measure where each board really is (tape measure, +/- 10 cm is fine) and put it here.",
+    "Never move a board after recording training data - if you do, calibrate and record again.",
+    "receivers: the id is the board's RECEIVER_ID. band '2.4' hears the transmitters; band '5' with",
+    "  source 'access_point' measures the home router's replies (the C5). 'enabled': false = not in use.",
+    "transmitters: the id is the board's NODE_ID (1..10). Remove entries for boards you don't have.",
+    "access_point: where your home ROUTER (or the mesh box the C5 connects to) is. in_room: true only if",
+    "  it really is inside this room - then its link to the C5 also helps place people.",
+    "Edit this file, then restart server.py (or POST /api/model/reload)."
+  ],
+  "name": "Basement",
+  "width": 6.10,
+  "depth": 6.10,
+  "height": 2.30,
+  "zones": {"cols": 3, "rows": 3},
+  "receivers": {
+    "1": {"x": 3.05, "y": 0.25, "z": 1.00, "label": "S3 receiver (2.4 GHz)", "band": "2.4"},
+    "2": {"x": 0.60, "y": 0.25, "z": 1.00, "label": "C5 receiver (5 GHz)", "band": "5", "source": "access_point"},
+    "3": {"x": 3.05, "y": 5.85, "z": 1.00, "label": "2nd 2.4 GHz receiver (optional)", "band": "2.4", "enabled": false}
+  },
+  "transmitters": {
+    "1":  {"x": 0.25, "y": 1.60, "z": 1.00, "label": "TX 1"},
+    "2":  {"x": 0.25, "y": 3.40, "z": 1.00, "label": "TX 2"},
+    "3":  {"x": 0.25, "y": 5.20, "z": 1.00, "label": "TX 3"},
+    "4":  {"x": 0.90, "y": 5.85, "z": 1.00, "label": "TX 4"},
+    "5":  {"x": 2.25, "y": 5.85, "z": 1.00, "label": "TX 5"},
+    "6":  {"x": 3.85, "y": 5.85, "z": 1.00, "label": "TX 6"},
+    "7":  {"x": 5.20, "y": 5.85, "z": 1.00, "label": "TX 7"},
+    "8":  {"x": 5.85, "y": 5.20, "z": 1.00, "label": "TX 8"},
+    "9":  {"x": 5.85, "y": 3.40, "z": 1.00, "label": "TX 9"},
+    "10": {"x": 5.85, "y": 1.60, "z": 1.00, "label": "TX 10"}
+  },
+  "access_point": {"x": 5.50, "y": 7.50, "z": 1.50, "label": "Home router", "in_room": false},
+  "furniture": []
+}

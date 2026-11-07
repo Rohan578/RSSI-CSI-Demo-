@@ -11,6 +11,18 @@ Raspberry Pi 5 collects the CSI, works out roughly where people are, and shows i
 people really are, so you can see the estimate's error. Real-room accuracy has to be
 measured with your own data; see [How accurate is it?](#how-accurate-is-it).*
 
+**Two versions in this branch:**
+
+| Version | Server | Firmware | Guide |
+|---|---|---|---|
+| **Raspberry Pi** (this README) | [`pi_server/`](pi_server/) on a Pi 5, set up by [`deploy/`](deploy/) | [`firmware/pi/`](firmware/pi/): 5 transmitters + S3 (+ optional C5) | this file, then [`docs/FLASHING.md`](docs/FLASHING.md) |
+| **Home WiFi, no Pi** | [`laptop_server/`](laptop_server/) on any laptop | [`firmware/home-wifi/`](firmware/home-wifi/): up to 10 transmitters + S3 (2.4 GHz) + C5 (5 GHz) | [`docs/HOME_WIFI.md`](docs/HOME_WIFI.md) |
+
+Keep each set together: the Pi receivers look for the Pi (`csi-pi.local`), while the home-WiFi
+receivers find `laptop_server/` from its announcements and their transmitters follow its
+channel beacons. The home-WiFi version is
+also its own branch, [`home-wifi-dual-band`](https://github.com/Rohan578/RSSI-CSI-Demo-/tree/home-wifi-dual-band).
+
 **Demo videos (simulations):**
 
 [![The 3D view: a second person walks in and both are tracked (simulation, click for the full video)](docs/media/wifi-sensing-3d-demo.gif)](docs/media/wifi-sensing-3d-demo.mp4)
@@ -65,7 +77,7 @@ a person crossing paths, and home-WiFi interference being filtered.*
 ### Try it in 1 minute, no hardware needed
 
 ```bash
-cd csi-arduino/pi_server
+cd pi_server
 pip install -r requirements.txt       # flask, numpy, scikit-learn
 ./demo.sh                             # server + simulated basement, auto-calibrated
 ```
@@ -78,11 +90,11 @@ stops it. Demo data goes to `/tmp/csi-demo`.
 
 | # | Step | Where | Details |
 |---|------|-------|---------|
-| 1 | Get the code from this branch (`flash-ready`) and put the WiFi password (currently **ORBI21**) into the S3 sketch | any computer | [`csi-arduino/FLASHING.md`](csi-arduino/FLASHING.md), steps 1–2 |
-| 2 | Flash the S3 receiver and ONE transmitter, check it reaches the Pi, then flash the other four | Arduino IDE | [`csi-arduino/FLASHING.md`](csi-arduino/FLASHING.md), steps 3–6 |
-| 3 | Prepare the Pi's SD card: user `csi`, SSH, linksys222 WiFi | laptop, card in a USB reader | `./csi-arduino/deploy/prepare_sd_card.sh` (see [Deploying](#deploying-to-the-pi)) |
-| 4 | Deploy the Pi software | laptop, Pi on the ethernet cable | `./csi-arduino/deploy/deploy_to_pi.sh` |
-| 5 | Pin the access point's channels | laptop, through the Pi | `./csi-arduino/deploy/ap_tunnel.sh`, then [AP setup](#access-point-setup) |
+| 1 | Get the code from this branch (`pi-csi-dashboard`) and put the WiFi password (currently **ORBI21**) into the S3 sketch | any computer | [`docs/FLASHING.md`](docs/FLASHING.md), steps 1–2 |
+| 2 | Flash the S3 receiver and ONE transmitter, check it reaches the Pi, then flash the other four | Arduino IDE | [`docs/FLASHING.md`](docs/FLASHING.md), steps 3–6 |
+| 3 | Prepare the Pi's SD card: user `csi`, SSH, linksys222 WiFi | laptop, card in a USB reader | `./deploy/prepare_sd_card.sh` (see [Deploying](#deploying-to-the-pi)) |
+| 4 | Deploy the Pi software | laptop, Pi on the ethernet cable | `./deploy/deploy_to_pi.sh` |
+| 5 | Pin the access point's channels | laptop, through the Pi | `./deploy/ap_tunnel.sh`, then [AP setup](#access-point-setup) |
 | 6 | Place the boards, measure them into `room.json` | basement | [The room](#the-room-zones-placement-roomjson) |
 | 7 | Calibrate the empty room | `http://10.42.0.222:5000/room` | everyone out, press **Calibrate** |
 | 8 | Record volunteers, train, reload | `/collect`, then `train_model.py` on the Pi | [Volunteers](#collecting-training-data-with-volunteers), [Training](#training-the-ai-model) |
@@ -211,7 +223,7 @@ project uses **amplitude and RSSI only**, with AGC removed by normalisation.
 
 ### Default layout
 
-`csi-arduino/pi_server/room.json`:
+`pi_server/room.json`:
 
 ```
               north wall
@@ -382,7 +394,7 @@ nmcli connection up ORBI21        # back to the internet
 
 ## ESP32 firmware
 
-All the firmware is in `csi-arduino/`. It is an Arduino IDE project based on Espressif's
+All the Pi setup's firmware is in `firmware/pi/`. It is an Arduino IDE project based on Espressif's
 `esp-csi` examples.
 
 ### Arduino IDE setup (once)
@@ -403,8 +415,8 @@ All the firmware is in `csi-arduino/`. It is an Arduino IDE project based on Esp
 The Serial Monitor runs at **115200 baud**. If an upload won't start, hold **BOOT** while
 plugging in.
 
-> **To flash the boards, follow [`csi-arduino/FLASHING.md`](csi-arduino/FLASHING.md).** It
-> covers getting the code from `flash-ready`, adding the password, the exact Arduino settings, and
+> **To flash the boards, follow [`docs/FLASHING.md`](docs/FLASHING.md).** It
+> covers getting the code from `pi-csi-dashboard`, adding the password, the exact Arduino settings, and
 > what the Serial Monitor shows on success and on failure. This section explains how the
 > firmware works.
 
@@ -483,7 +495,7 @@ That's why this order matters. If something regresses, the original code is in
 
 ## Raspberry Pi software
 
-Everything is in `csi-arduino/pi_server/`. It is pure Python plus static web files.
+Everything is in `pi_server/`. It is pure Python plus static web files.
 
 | File | What it does |
 |---|---|
@@ -757,7 +769,7 @@ people right only 28% of the time on the simulator. "Count, then the top-N squar
 ## Collecting training data with volunteers
 
 **The complete briefing, floor-tape plan and session plan are in
-[`csi-arduino/VOLUNTEERS.md`](csi-arduino/VOLUNTEERS.md).**
+[`docs/VOLUNTEERS.md`](docs/VOLUNTEERS.md).**
 
 ### What to tell the volunteers
 
@@ -868,7 +880,7 @@ those files needs no root, so with the card in a USB reader:
 ```bash
 lsblk                                          # find the card: partitions "bootfs" + "rootfs"
 udisksctl mount -b /dev/sdX1                   # its bootfs partition
-CSI_WIFI_PSK='<linksys222 password>' ./csi-arduino/deploy/prepare_sd_card.sh /run/media/$USER/bootfs
+CSI_WIFI_PSK='<linksys222 password>' ./deploy/prepare_sd_card.sh /run/media/$USER/bootfs
 udisksctl unmount -b /dev/sdX1 && udisksctl power-off -b /dev/sdX
 ```
 
@@ -921,7 +933,7 @@ Overrides: `SSID`, `PI_IP`, `PREFIX`, `DHCP_START`, `DHCP_END`, `WIFI_BAND` (`a`
 ### Later
 
 ```bash
-./csi-arduino/deploy/deploy_to_pi.sh --code    # copy new code, restart csi-server
+./deploy/deploy_to_pi.sh --code    # copy new code, restart csi-server
 ssh csi-pi 'journalctl -u csi-server -f'       # live logs
 ssh csi-pi 'sudo systemctl restart csi-server' # e.g. after editing room.json
 ```
@@ -930,13 +942,13 @@ ssh csi-pi 'sudo systemctl restart csi-server' # e.g. after editing room.json
 
 ## Access point setup
 
-Full guide: [`csi-arduino/deploy/AP_SETUP.md`](csi-arduino/deploy/AP_SETUP.md).
+Full guide: [`deploy/AP_SETUP.md`](deploy/AP_SETUP.md).
 
 **Plan:** 2.4 GHz fixed on channel **11** at 20 MHz, and 5 GHz fixed on **157**.
 
 **Reaching the admin page without leaving the home network:**
 
-1. Run `./csi-arduino/deploy/ap_tunnel.sh`. It tunnels laptop → Pi → AP.
+1. Run `./deploy/ap_tunnel.sh`. It tunnels laptop → Pi → AP.
 2. Open `https://localhost:4343`.
 
 **Settings that matter for sensing:**
@@ -1294,37 +1306,48 @@ reconstructions.
 ## Repository layout
 
 ```
-RSSI-CSI-Demo-/
+RSSI-CSI-Demo-/   (branch pi-csi-dashboard)
   README.md                  <- this file
   .githooks/pre-commit       <- refuses commits containing a real WIFI_PASSWORD
-  docs/images/               <- screenshots (from the simulator)
-  csi-arduino/               <- CURRENT CODE (extracted from the zip and extended)
-    README.md                  original firmware README (with a pointer to this setup)
+  firmware/
+    pi/                      <- FLASH THESE for the Pi setup
+      csi_transmitter/         transmitter sketch (ESP32/C3/C6/C5)
+      csi_receiver_s3/         S3 receiver sketch
+      csi_receiver_c5/         C5 receiver sketch (optional, 5 GHz)
+    home-wifi/               <- the home-WiFi version's sketches (use with laptop_server/)
+      csi_transmitter/         up to 10 transmitters, follow the receiver's channel
+      csi_receiver_24/         2.4 GHz receiver (S3)
+      csi_receiver_5g/         5 GHz receiver (C5, pings the router)
+  pi_server/                 <- everything that runs on the Pi
+    server.py analysis.py localizer.py csi_features.py guided.py
+    train_model.py sim_room.py demo.sh fake_receiver.py compare_bands.py
+    room.json requirements.txt
+    static/ room.html room.js collect.html vendor/three/
+    models/                    trained model goes here (not in git)
+    data/                      recordings, calibration, sessions (not in git)
+  laptop_server/             <- the home-WiFi version's server: runs on any laptop, no Pi
+    (same files as server/ on the home-wifi-dual-band branch; see docs/HOME_WIFI.md)
+  deploy/
+    fill_wifi_password.sh      laptop: password into ALL receiver configs (--clear removes it)
+    prepare_sd_card.sh         laptop: Pi SD card -> user csi, SSH, WiFi (cloud-init)
+    use_home_wifi.sh           laptop: put the Pi on a home WiFi (ORBI21), password piped over SSH
+    deploy_to_pi.sh            laptop: key, copy, run setup, ssh aliases
+    setup_pi.sh                Pi: packages, WiFi, DHCP, services
+    ap_tunnel.sh               laptop: reach the AP's admin page through the Pi
+    AP_SETUP.md                pin the AP's channels
+  docs/
     FLASHING.md                HOW TO FLASH THE ESP32s (start here)
     README_PI.md               Pi-side guide for this setup
     VOLUNTEERS.md              volunteer briefing, floor grid, session plan
     SETUP_DUAL_BAND.md         original dual-band (S3 + C5) setup sheet
-    csi_transmitter/           transmitter sketch (ESP32/C3/C6/C5)
-    csi_receiver_s3/           S3 receiver sketch
-    csi_receiver_c5/           C5 receiver sketch (optional, 5 GHz)
-    pi_server/                 everything that runs on the Pi
-      server.py analysis.py localizer.py csi_features.py guided.py
-      train_model.py sim_room.py demo.sh fake_receiver.py compare_bands.py
-      room.json requirements.txt
-      static/ room.html room.js collect.html vendor/three/
-      models/                  trained model goes here (not in git)
-      data/                    recordings, calibration, sessions (not in git)
-    deploy/
-      fill_wifi_password.sh      laptop: password into the receiver configs
-      prepare_sd_card.sh         laptop: Pi SD card -> user csi, SSH, WiFi (cloud-init)
-      use_home_wifi.sh           laptop: put the Pi on a home WiFi (ORBI21), password piped over SSH
-      deploy_to_pi.sh            laptop: key, copy, run setup, ssh aliases
-      setup_pi.sh                Pi: packages, WiFi, DHCP, services
-      ap_tunnel.sh               laptop: reach the AP's admin page through the Pi
-      AP_SETUP.md                pin the AP's channels
+    FIRMWARE_NOTES.md          original firmware README (from csi-arduino.zip)
+    HOME_WIFI.md               the home-WiFi version's full guide (laptop_server/ + firmware/home-wifi/)
+    images/                    screenshots (from the simulator)
+    media/                     demo videos and GIF previews
   legacy/                    <- old experiments + the original csi-arduino.zip. Do NOT flash
     README.md config.h csi_packet.h espnow_packet.h csi_receiver_s3.ino csi_transmitter.ino
     esp32_CSI_sketch.ino "Transmitter Code(C3,C6 & ESP32)" csi-arduino.zip
+    espnow-csi-link/           first ESP-NOW CSI link (C6 -> S3) + PC receiver
 ```
 
 ---
@@ -1405,7 +1428,7 @@ boxes in `room.json`. Several rooms would need receivers or transmitters in each
 - The firmware is based on Espressif's official
   [esp-csi](https://github.com/espressif/esp-csi) examples `csi_send` and `csi_recv`.
 - [three.js](https://threejs.org) 0.186.1 is bundled in
-  `csi-arduino/pi_server/static/vendor/three/` under the MIT licence (its `LICENSE` is
+  `pi_server/static/vendor/three/` under the MIT licence (its `LICENSE` is
   included there).
 - The Python side uses [Flask](https://flask.palletsprojects.com),
   [NumPy](https://numpy.org) and [scikit-learn](https://scikit-learn.org).

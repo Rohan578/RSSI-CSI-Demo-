@@ -1,0 +1,13 @@
+# Recordings, calibration and trained models stay on the computer that runs the server
+pi_server/data/
+pi_server/models/*.joblib
+pi_server/models/*.json
+laptop_server/data/
+laptop_server/models/*.joblib
+laptop_server/models/*.json
+__pycache__/
+*.pyc
+# Arduino build output
+build/
+# Never commit the WiFi password file the deploy script hands to the Pi
+.wifi_psk
